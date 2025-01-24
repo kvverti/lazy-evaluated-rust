@@ -29,7 +29,7 @@ macro_rules! impl_tuple {
         impl<$($t : ExprCapable),*> DataExpr for ( $(Expression<$t>,)* ) {
             fn destructure(v: Expression<Self>) -> Self {
                 (
-                    $( Expression::lazy({ let v = v.clone(); move || v.eval_ref().$n.eval() }), )*
+                    $( Expression::lazy({ let v = v.clone(); move || v.eval_ref().$n.eval_ref().clone() }), )*
                 )
             }
         }
@@ -66,9 +66,7 @@ impl<T: ExprCapable, const N: usize> ExprCapable for [Expression<T>; N] {}
 
 impl<T: ExprCapable, const N: usize> DataExpr for [Expression<T>; N] {
     fn destructure(v: Expression<Self>) -> Self {
-        core::array::from_fn(|idx| {
-            v.clone().map(move |arr| arr[idx].eval())
-        })
+        core::array::from_fn(|idx| v.clone().map(move |arr| arr[idx].eval_ref().clone()))
     }
 }
 
@@ -76,7 +74,7 @@ impl<T: ExprCapable, const N: usize> DataExpr for [Expression<T>; N] {
 /// Expressions can be constructed from a value directly, or (more commonly)
 /// from a thunk. Function expressions can be applied lazily, and data expressions
 /// can be matched against lazily.
-/// 
+///
 /// Interestingly, `Self::map`, `Self::eval`, and `Self::apply` form a comonad with `counit = eval` and `cobind = apply`.
 #[derive(Debug)]
 pub struct Expression<T> {
@@ -119,13 +117,19 @@ impl<T: ExprCapable> Expression<T> {
     }
 
     /// Evaluates this expression and returns a clone of the underlying value.
-    pub fn eval(&self) -> T {
-        self.eval_ref().clone()
+    pub fn eval(self) -> T {
+        // evaluate the expression now to prevent early drop in the case of a reference cycle
+        Lazy::force(&self.value);
+        match Arc::try_unwrap(self.value) {
+            Ok(lazy) => Lazy::into_value(lazy)
+                .unwrap_or_else(|_| panic!("expression should have been evaluated")),
+            Err(arc) => (**arc).clone(),
+        }
     }
 
     /// Returns an expression that evaluates to the value of this expression applied to the given function.
-    pub fn map<R: ExprCapable>(self, f: impl FnOnce(&T) -> R + 'static) -> Expression<R> {
-        Expression::lazy(move || f(self.eval_ref()))
+    pub fn map<R: ExprCapable>(self, f: impl FnOnce(T) -> R + 'static) -> Expression<R> {
+        Expression::lazy(move || f(self.eval()))
     }
 }
 
@@ -133,7 +137,16 @@ impl<T: ExprCapable, R: ExprCapable> Expression<FnType<T, R>> {
     /// Lazily call this function with the given argument. When evaluated,
     /// this evaluates `self` and calls it with `arg`.
     pub fn apply(self, arg: Expression<T>) -> Expression<R> {
-        Expression::lazy(move || self.eval().0.call(arg))
+        Expression::lazy(|| self.eval().0.call(arg))
+    }
+
+    /// Call this function with the given argument. This method uses strict (call-by-value)
+    /// semantics; the argument will always be evaluated.
+    pub fn apply_strict(self, arg: Expression<T>) -> Expression<R> {
+        Expression::lazy(|| {
+            Lazy::force(&arg.value);
+            self.eval().0.call(arg)
+        })
     }
 }
 

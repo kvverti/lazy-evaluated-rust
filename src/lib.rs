@@ -1,29 +1,16 @@
+
+use data::list::ConsList;
 use expression::{DataExpr, ExprCapable, Expression, FnType};
 
-mod expression;
+pub mod expression;
+
+pub mod data;
+pub mod control;
 
 /// An expression that never evaluates to a value. This is achieved
 /// by immediately panicking when evaluated.
 pub fn undefined<T: ExprCapable>() -> Expression<T> {
     Expression::lazy(|| panic!("tried to evaluate the bottom value"))
-}
-
-/// A lazy cons list.
-#[derive(Debug, Clone)]
-pub enum ConsList<T> {
-    Nil,
-    Cons {
-        head: Expression<T>,
-        tail: Expression<Self>,
-    },
-}
-
-impl<T: ExprCapable> ExprCapable for ConsList<T> {}
-
-impl<T: ExprCapable> DataExpr for ConsList<T> {
-    fn destructure(v: Expression<Self>) -> Self {
-        v.eval()
-    }
 }
 
 /// The identity function for the type `T`. It returns its input unchanged.
@@ -34,17 +21,13 @@ pub fn id<T: ExprCapable>() -> Expression<FnType<T, T>> {
 /// The constant function. It produces a function that ignores its input and evaluates to
 /// the provided value.
 pub fn constant<T: ExprCapable, R: ExprCapable>() -> Expression<FnType<R, FnType<T, R>>> {
-    Expression::new(FnType::new(|c| FnType::new(move |_| c.eval())))
+    Expression::new(FnType::new(|c| FnType::new(|_| c.eval())))
 }
 
 /// Create an infinite list of the given value.
 pub fn repeat<T: ExprCapable>() -> Expression<FnType<T, ConsList<T>>> {
     Expression::new(FnType::new(|x| {
-        Expression::fix(FnType::new(move |xs| ConsList::Cons {
-            head: x,
-            tail: xs,
-        }))
-        .eval()
+        Expression::fix(FnType::new(|xs| ConsList::Cons { head: x, tail: xs })).eval()
     }))
 }
 
@@ -62,9 +45,14 @@ pub fn fix<T: ExprCapable>() -> Expression<FnType<FnType<T, T>, T>> {
 pub fn compose<A: ExprCapable, B: ExprCapable, C: ExprCapable>(
 ) -> Expression<FnType<FnType<B, C>, FnType<FnType<A, B>, FnType<A, C>>>> {
     Expression::new(FnType::new(|f| {
-        FnType::new(move |g| {
-            FnType::new(move |x| f.apply(g.apply(x)).eval())
-        })
+        FnType::new(|g| FnType::new(|x| f.apply(g.apply(x)).eval()))
+    }))
+}
+
+pub fn curry<A: ExprCapable, B: ExprCapable, C: ExprCapable>(
+) -> Expression<FnType<FnType<(Expression<A>, Expression<B>), C>, FnType<A, FnType<B, C>>>> {
+    Expression::new(FnType::new(|f| {
+        FnType::new(|a| FnType::new(|b| f.apply(Expression::new((a, b))).eval()))
     }))
 }
 
