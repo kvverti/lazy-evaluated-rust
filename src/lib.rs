@@ -1,11 +1,10 @@
-
 use data::list::ConsList;
-use expression::{DataExpr, ExprCapable, Expression, FnType};
+use expression::{ExprCapable, Expression, FnType};
 
 pub mod expression;
 
-pub mod data;
 pub mod control;
+pub mod data;
 
 /// An expression that never evaluates to a value. This is achieved
 /// by immediately panicking when evaluated.
@@ -56,8 +55,20 @@ pub fn curry<A: ExprCapable, B: ExprCapable, C: ExprCapable>(
     }))
 }
 
+pub fn combine<A: ExprCapable, B: ExprCapable, C: ExprCapable, D: ExprCapable>() -> Expression<
+    FnType<FnType<A, FnType<B, C>>, FnType<FnType<D, A>, FnType<FnType<D, B>, FnType<D, C>>>>,
+> {
+    Expression::new(FnType::new(|f| {
+        FnType::new(|g| {
+            FnType::new(|h| FnType::new(|x| f.apply(g.apply(x.clone())).apply(h.apply(x)).eval()))
+        })
+    }))
+}
+
 #[cfg(test)]
 mod tests {
+    use crate::expression::DataExpr;
+
     use super::*;
 
     #[test]

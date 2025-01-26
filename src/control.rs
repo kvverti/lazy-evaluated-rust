@@ -1,6 +1,8 @@
 use crate::{expression::{ExprCapable, Expression, FnType}, data::Foldable};
 
-pub trait TypeCtor {
+pub mod state;
+
+pub trait TypeCtor: ExprCapable {
     type Apply<T: ExprCapable>: ExprCapable;
 }
 

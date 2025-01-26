@@ -1,4 +1,4 @@
-use std::{marker::PhantomData, sync::Arc};
+use std::{marker::PhantomData, sync::Arc, fmt::Debug};
 
 use once_cell::sync::Lazy;
 
@@ -150,6 +150,29 @@ impl<T: ExprCapable, R: ExprCapable> Expression<FnType<T, R>> {
     }
 }
 
+// comparison operators for expressions
+// these are all strict in both arguments.
+
+impl<T: ExprCapable + PartialEq> PartialEq for Expression<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.eval_ref() == other.eval_ref()
+    }
+}
+
+impl<T: ExprCapable + Eq> Eq for Expression<T> {}
+
+impl<T: ExprCapable + PartialOrd> PartialOrd for Expression<T> {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.eval_ref().partial_cmp(other.eval_ref())
+    }
+}
+
+impl<T: ExprCapable + Ord> Ord for Expression<T> {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.eval_ref().cmp(other.eval_ref())
+    }
+}
+
 /// Trait for functions that can be stored in lazily evaluated expressions.
 pub trait FnCapable<T, R>: 'static {
     fn call(self: Box<Self>, v: Expression<T>) -> R;
@@ -185,6 +208,12 @@ impl<T: ExprCapable, R: ExprCapable> FnType<T, R> {
 impl<T: 'static, R: 'static> Clone for FnType<T, R> {
     fn clone(&self) -> Self {
         Self(self.0.dyn_clone())
+    }
+}
+
+impl<T, R> Debug for FnType<T, R> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("FnType").field(&"...").finish()
     }
 }
 
