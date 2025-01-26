@@ -3,7 +3,7 @@ use crate::{
     expression::{DataExpr, ExprCapable, Expression, FnType},
 };
 
-use super::{Associative, Foldable, Monoid};
+use super::{compose::Compose, Associative, Foldable, Monoid, Newtype};
 
 #[derive(Debug, Clone)]
 pub enum Maybe<T> {
@@ -117,6 +117,32 @@ impl Traversable for Maybe<()> {
             FnType::new(|maybe_a| match DataExpr::destructure(maybe_a) {
                 Maybe::Nothing => F::pure().apply(Expression::new(Maybe::Nothing)).eval(),
                 Maybe::Just(a) => F::map().apply(Self::pure()).apply(f.apply(a)).eval(),
+            })
+        }))
+    }
+}
+
+/// The Maybe monad transformer, which adds optionality to any given monad.
+pub type MaybeT<M, A> = Compose<M, Maybe<()>, A>;
+
+impl<M: Monad> Monad for MaybeT<M, ()> {
+    fn bind<A: ExprCapable, B: ExprCapable>(
+    ) -> Expression<FnType<FnType<A, Self::Apply<B>>, FnType<Self::Apply<A>, Self::Apply<B>>>> {
+        Expression::new(FnType::new(|f| {
+            FnType::new(|ma: Expression<MaybeT<M, A>>| {
+                let ma = FnType::new(Newtype::unlift).apply(ma);
+                MaybeT::lift(
+                    M::bind()
+                        .apply(Expression::new(FnType::new(
+                            |maybe_a: Expression<Maybe<A>>| match DataExpr::destructure(maybe_a) {
+                                Maybe::Nothing => {
+                                    M::pure().apply(Expression::new(Maybe::Nothing)).eval()
+                                }
+                                Maybe::Just(a) => MaybeT::unlift(f.apply(a)),
+                            },
+                        )))
+                        .apply(ma),
+                )
             })
         }))
     }

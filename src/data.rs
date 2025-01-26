@@ -9,15 +9,22 @@ pub mod constant;
 pub mod list;
 pub mod maybe;
 
-pub trait Newtype<T>: Sized {
-    fn lift(v: Expression<T>) -> Self;
-    fn unlift(v: Expression<Self>) -> T;
+pub trait Newtype: ExprCapable {
+    type Inner: ExprCapable;
+
+    fn lift(v: Expression<Self::Inner>) -> Self;
+    fn unlift(v: Expression<Self>) -> Self::Inner;
+}
+
+pub fn coerce<T: Newtype, U: Newtype<Inner = T::Inner>>() -> Expression<FnType<T, U>> {
+    Expression::new(FnType::new(|t| U::lift(FnType::new(T::unlift).apply(t))))
 }
 
 /// A trait for types that define an associative binary operator.
 /// E.g. addition over the integers or list concatenation.
 pub trait Associative: ExprCapable {
     /// The associative binary operation.
+    // todo: try implementing instances for type tokens that map to the actual type (similar to type constructors)
     fn append() -> Expression<FnType<Self, FnType<Self, Self>>>;
 }
 

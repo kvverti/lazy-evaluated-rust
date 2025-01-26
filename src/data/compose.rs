@@ -16,12 +16,14 @@ impl<F: TypeCtor, G: TypeCtor, A: ExprCapable> DataExpr for Compose<F, G, A> {
     }
 }
 
-impl<F: TypeCtor, G: TypeCtor, A: ExprCapable> Newtype<F::Apply<G::Apply<A>>> for Compose<F, G, A> {
-    fn lift(v: Expression<F::Apply<G::Apply<A>>>) -> Self {
+impl<F: TypeCtor, G: TypeCtor, A: ExprCapable> Newtype for Compose<F, G, A> {
+    type Inner = F::Apply<G::Apply<A>>;
+
+    fn lift(v: Expression<Self::Inner>) -> Self {
         Self(v)
     }
 
-    fn unlift(v: Expression<Self>) -> F::Apply<G::Apply<A>> {
+    fn unlift(v: Expression<Self>) -> Self::Inner {
         v.eval().0.eval()
     }
 }
