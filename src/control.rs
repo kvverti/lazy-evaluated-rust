@@ -1,9 +1,14 @@
 use crate::{
     data::Foldable,
-    expression::{ExprCapable, Expression, FnType},
+    expression::ExprCapable,
+    function::{compose, constant, id},
+    Expr, ExprType,
 };
 
+pub mod env;
+pub mod identity;
 pub mod state;
+pub mod write;
 
 /// Marks a type constructor, an abstraction for a generic type.
 pub trait TypeCtor: ExprCapable {
@@ -15,48 +20,47 @@ pub trait TypeCtor2: ExprCapable {
 }
 
 pub trait Functor: TypeCtor {
-    fn map<A: ExprCapable, B: ExprCapable>(
-    ) -> Expression<FnType<FnType<A, B>, FnType<Self::Apply<A>, Self::Apply<B>>>>;
+    fn map<A: ExprCapable, B: ExprCapable>() -> Expr!((A => B) => Self::Apply<A> => Self::Apply<B>);
 }
 
 pub trait Applicative: Functor {
-    fn pure<A: ExprCapable>() -> Expression<FnType<A, Self::Apply<A>>>;
+    fn pure<A: ExprCapable>() -> Expr!(A => Self::Apply<A>);
 
-    fn map2<A: ExprCapable, B: ExprCapable, C: ExprCapable>() -> Expression<
-        FnType<
-            FnType<A, FnType<B, C>>,
-            FnType<Self::Apply<A>, FnType<Self::Apply<B>, Self::Apply<C>>>,
-        >,
-    >;
+    fn map2<A: ExprCapable, B: ExprCapable, C: ExprCapable>(
+    ) -> Expr!((A => B => C) => Self::Apply<A> => Self::Apply<B> => Self::Apply<C>);
 
     fn ap<A: ExprCapable, B: ExprCapable>(
-    ) -> Expression<FnType<Self::Apply<FnType<A, B>>, FnType<Self::Apply<A>, Self::Apply<B>>>> {
-        Self::map2().apply(super::id())
+    ) -> Expr!(Self::Apply<ExprType!(A => B)> => Self::Apply<A> => Self::Apply<B>) {
+        Self::map2().apply(id())
     }
 }
 
 pub trait Monad: Applicative {
     fn bind<A: ExprCapable, B: ExprCapable>(
-    ) -> Expression<FnType<FnType<A, Self::Apply<B>>, FnType<Self::Apply<A>, Self::Apply<B>>>>;
+    ) -> Expr!((A => Self::Apply<B>) => Self::Apply<A> => Self::Apply<B>);
 
-    fn join<A: ExprCapable>() -> Expression<FnType<Self::Apply<Self::Apply<A>>, Self::Apply<A>>> {
-        Self::bind().apply(super::id())
+    fn join<A: ExprCapable>() -> Expr!(Self::Apply<Self::Apply<A>> => Self::Apply<A>) {
+        Self::bind().apply(id())
     }
 
     fn sequence<A: ExprCapable, B: ExprCapable>(
-    ) -> Expression<FnType<Self::Apply<B>, FnType<Self::Apply<A>, Self::Apply<B>>>> {
-        super::compose()
-            .apply(Self::bind())
-            .apply(super::constant())
+    ) -> Expr!(Self::Apply<B> => Self::Apply<A> => Self::Apply<B>) {
+        compose().apply(Self::bind()).apply(constant())
+    }
+
+    // (f <=< g) a = f =<< g a
+    fn kleisli<A: ExprCapable, B: ExprCapable, C: ExprCapable>(
+    ) -> Expr!((B => Self::Apply<C>) => (A => Self::Apply<B>) => A => Self::Apply<C>) {
+        compose().apply(compose()).apply(Self::bind())
     }
 }
 
 pub trait Traversable: Functor + Foldable {
     fn traverse<F: Applicative, A: ExprCapable, B: ExprCapable>(
-    ) -> Expression<FnType<FnType<A, F::Apply<B>>, FnType<Self::Apply<A>, F::Apply<Self::Apply<B>>>>>;
+    ) -> Expr!((A => F::Apply<B>) => Self::Apply<A> => F::Apply<Self::Apply<B>>);
 
     fn sequence<F: Applicative, A: ExprCapable>(
-    ) -> Expression<FnType<Self::Apply<F::Apply<A>>, F::Apply<Self::Apply<A>>>> {
-        Self::traverse::<F, _, _>().apply(super::id())
+    ) -> Expr!(Self::Apply<F::Apply<A>> => F::Apply<Self::Apply<A>>) {
+        Self::traverse::<F, _, _>().apply(id())
     }
 }

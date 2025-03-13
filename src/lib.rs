@@ -2,7 +2,7 @@ use data::list::ConsList;
 use expression::{ExprCapable, Expression, FnType};
 
 pub mod expression;
-
+pub mod function;
 pub mod control;
 pub mod data;
 
@@ -10,17 +10,6 @@ pub mod data;
 /// by immediately panicking when evaluated.
 pub fn undefined<T: ExprCapable>() -> Expression<T> {
     Expression::lazy(|| panic!("tried to evaluate the bottom value"))
-}
-
-/// The identity function for the type `T`. It returns its input unchanged.
-pub fn id<T: ExprCapable>() -> Expression<FnType<T, T>> {
-    Expression::new(FnType::new(|x| x.eval()))
-}
-
-/// The constant function. It produces a function that ignores its input and evaluates to
-/// the provided value.
-pub fn constant<T: ExprCapable, R: ExprCapable>() -> Expression<FnType<R, FnType<T, R>>> {
-    Expression::new(FnType::new(|c| FnType::new(|_| c.eval())))
 }
 
 /// Create an infinite list of the given value.
@@ -40,28 +29,10 @@ pub fn fix<T: ExprCapable>() -> Expression<FnType<FnType<T, T>, T>> {
     }))
 }
 
-/// Composes two functions `f` and `g`, producing a function that evaluates `x` to `f(g(x))`.
-pub fn compose<A: ExprCapable, B: ExprCapable, C: ExprCapable>(
-) -> Expression<FnType<FnType<B, C>, FnType<FnType<A, B>, FnType<A, C>>>> {
-    Expression::new(FnType::new(|f| {
-        FnType::new(|g| FnType::new(|x| f.apply(g.apply(x)).eval()))
-    }))
-}
-
 pub fn curry<A: ExprCapable, B: ExprCapable, C: ExprCapable>(
 ) -> Expression<FnType<FnType<(Expression<A>, Expression<B>), C>, FnType<A, FnType<B, C>>>> {
     Expression::new(FnType::new(|f| {
         FnType::new(|a| FnType::new(|b| f.apply(Expression::new((a, b))).eval()))
-    }))
-}
-
-pub fn combine<A: ExprCapable, B: ExprCapable, C: ExprCapable, D: ExprCapable>() -> Expression<
-    FnType<FnType<A, FnType<B, C>>, FnType<FnType<D, A>, FnType<FnType<D, B>, FnType<D, C>>>>,
-> {
-    Expression::new(FnType::new(|f| {
-        FnType::new(|g| {
-            FnType::new(|h| FnType::new(|x| f.apply(g.apply(x.clone())).apply(h.apply(x)).eval()))
-        })
     }))
 }
 

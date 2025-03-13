@@ -70,6 +70,22 @@ impl<T: ExprCapable, const N: usize> DataExpr for [Expression<T>; N] {
     }
 }
 
+#[macro_export]
+macro_rules! ExprType {
+    (type $ty:ty) => { $ty };
+    ($tyname:path) => { $tyname };
+    ($arg:path => $($ret:tt)*) => { $crate::expression::FnType<$crate::ExprType!($arg), $crate::ExprType!($($ret)*)> };
+    ($arg:tt => $($ret:tt)*) => { $crate::expression::FnType<$crate::ExprType!($arg), $crate::ExprType!($($ret)*)> };
+    (($($t:tt)*)) => { $crate::ExprType!($($t)*) };
+}
+
+#[macro_export]
+macro_rules! Expr {
+    ($($t:tt)*) => {
+        $crate::expression::Expression<$crate::ExprType!($($t)*)>
+    };
+}
+
 /// A lazily evaluated expression that evaluates to a value of type `T`.
 /// Expressions can be constructed from a value directly, or (more commonly)
 /// from a thunk. Function expressions can be applied lazily, and data expressions
@@ -137,7 +153,7 @@ impl<T: ExprCapable, R: ExprCapable> Expression<FnType<T, R>> {
     /// Lazily call this function with the given argument. When evaluated,
     /// this evaluates `self` and calls it with `arg`.
     pub fn apply(self, arg: Expression<T>) -> Expression<R> {
-        Expression::lazy(|| self.eval().0.call(arg))
+        Expression::lazy(|| self.eval().call(arg))
     }
 
     /// Call this function with the given argument. This method uses strict (call-by-value)
@@ -145,13 +161,13 @@ impl<T: ExprCapable, R: ExprCapable> Expression<FnType<T, R>> {
     pub fn apply_strict(self, arg: Expression<T>) -> Expression<R> {
         Expression::lazy(|| {
             Lazy::force(&arg.value);
-            self.eval().0.call(arg)
+            self.eval().call(arg)
         })
     }
 
     /// Compose this function with the given function.
     pub fn compose<U: ExprCapable>(self, f: Expression<FnType<U, T>>) -> Expression<FnType<U, R>> {
-        Expression::lazy(|| self.eval().compose(f).eval())
+        f.map(|f| self.eval().compose(f))
     }
 }
 
@@ -205,10 +221,14 @@ impl<T: ExprCapable, R: ExprCapable> FnType<T, R> {
         Self(Box::new(f))
     }
 
+    pub fn call(self, arg: Expression<T>) -> R {
+        self.0.call(arg)
+    }
+
     /// Lazily call this function with the given argument. When evaluated,
     /// this evaluates `self` and calls it with `arg`.
     pub fn apply(self, arg: Expression<T>) -> Expression<R> {
-        Expression::lazy(|| self.0.call(arg))
+        Expression::lazy(|| self.call(arg))
     }
 
     /// Call this function with the given argument. This method uses strict (call-by-value)
@@ -216,13 +236,13 @@ impl<T: ExprCapable, R: ExprCapable> FnType<T, R> {
     pub fn apply_strict(self, arg: Expression<T>) -> Expression<R> {
         Expression::lazy(|| {
             Lazy::force(&arg.value);
-            self.0.call(arg)
+            self.call(arg)
         })
     }
 
     /// Compose this function with the given function.
-    pub fn compose<U: ExprCapable>(self, f: Expression<FnType<U, T>>) -> Expression<FnType<U, R>> {
-        Expression::new(FnType::new(|u| self.apply(f.apply(u)).eval()))
+    pub fn compose<U: ExprCapable>(self, f: FnType<U, T>) -> FnType<U, R> {
+        FnType::new(|u| self.call(f.apply(u)))
     }
 }
 

@@ -1,7 +1,8 @@
 use crate::{
-    combine, compose, constant,
     control::{Applicative, Functor, Monad, Traversable, TypeCtor},
     expression::{DataExpr, ExprCapable, Expression, FnType},
+    function::{combine, compose, constant},
+    Expr,
 };
 
 use super::{Associative, Foldable, Monoid, Type};
@@ -17,7 +18,7 @@ pub enum ConsList<T> {
 }
 
 impl<T: ExprCapable> ConsList<T> {
-    pub fn concat() -> Expression<FnType<Self, FnType<Self, Self>>> {
+    pub fn concat() -> Expr!(Self => Self => Self) {
         Expression::fix(FnType::new(|rec| {
             FnType::new(|list_a| {
                 FnType::new(|list_b| match DataExpr::destructure(list_a) {

@@ -1,10 +1,9 @@
 use std::marker::PhantomData;
 
 use crate::{
-    constant,
     control::{Applicative, Functor, TypeCtor},
     expression::{ExprCapable, Expression, FnType},
-    id,
+    function::{constant, id},
 };
 
 use super::{Monoid, Type};

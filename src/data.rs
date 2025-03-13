@@ -1,13 +1,23 @@
 use crate::{
     control::TypeCtor,
     expression::{ExprCapable, Expression, FnType},
-    id,
+    function::id,
+    Expr,
 };
 
 pub mod compose;
 pub mod constant;
 pub mod list;
 pub mod maybe;
+
+#[macro_export]
+macro_rules! Tup {
+    ($($elem:ty),+ $(,)?) => {
+        ($($crate::expression::Expression<$elem>,)*)
+    };
+}
+
+pub use Tup;
 
 pub trait Newtype: ExprCapable {
     type Inner: ExprCapable;
@@ -16,7 +26,7 @@ pub trait Newtype: ExprCapable {
     fn unlift(v: Expression<Self>) -> Self::Inner;
 }
 
-pub fn coerce<T: Newtype, U: Newtype<Inner = T::Inner>>() -> Expression<FnType<T, U>> {
+pub fn coerce<T: Newtype, U: Newtype<Inner = T::Inner>>() -> Expr!(T => U) {
     Expression::new(FnType::new(|t| U::lift(FnType::new(T::unlift).apply(t))))
 }
 
@@ -29,22 +39,21 @@ pub trait Type: ExprCapable {
 pub trait Associative: Type {
     /// The associative binary operation.
     // todo: try implementing instances for type tokens that map to the actual type (similar to type constructors)
-    fn append() -> Expression<FnType<Self::Apply, FnType<Self::Apply, Self::Apply>>>;
+    fn append() -> Expr!(Self::Apply => Self::Apply => Self::Apply);
 }
 
 /// A trait for associative types that also have an identity element.
 pub trait Monoid: Associative {
     /// The identity element of the associative operator. This should satisfy
     /// `append(empty, a) == append(a, empty) == a`.
-    fn empty() -> Expression<Self::Apply>;
+    fn empty() -> Expr!(Self::Apply);
 }
 
 pub trait Foldable: TypeCtor {
-    fn foldr<A: ExprCapable, B: ExprCapable>(
-    ) -> Expression<FnType<FnType<A, FnType<B, B>>, FnType<B, FnType<Self::Apply<A>, B>>>>;
+    fn foldr<A: ExprCapable, B: ExprCapable>() -> Expr!((A => B => B) => B => Self::Apply<A> => B);
 
     fn foldl_strict<A: ExprCapable, B: ExprCapable>(
-    ) -> Expression<FnType<FnType<B, FnType<A, B>>, FnType<B, FnType<Self::Apply<A>, B>>>> {
+    ) -> Expr!((B => A => B) => B => Self::Apply<A> => B) {
         Expression::new(FnType::new(|f| {
             FnType::new(|b| {
                 FnType::new(|this| {
