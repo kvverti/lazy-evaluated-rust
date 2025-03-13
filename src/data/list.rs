@@ -4,7 +4,7 @@ use crate::{
     expression::{DataExpr, ExprCapable, Expression, FnType},
 };
 
-use super::{Associative, Foldable, Monoid};
+use super::{Associative, Foldable, Monoid, Type};
 
 /// A lazy cons list.
 #[derive(Debug, Clone)]
@@ -40,6 +40,10 @@ impl<T: ExprCapable> DataExpr for ConsList<T> {
     }
 }
 
+impl<T: ExprCapable> Type for ConsList<T> {
+    type Apply = Self;
+}
+
 impl<T: ExprCapable> Associative for ConsList<T> {
     fn append() -> Expression<FnType<Self, FnType<Self, Self>>> {
         Self::concat()
@@ -52,11 +56,16 @@ impl<T: ExprCapable> Monoid for ConsList<T> {
     }
 }
 
-impl TypeCtor for ConsList<()> {
+#[derive(Debug, Clone)]
+pub struct Cartesian;
+
+impl ExprCapable for Cartesian {}
+
+impl TypeCtor for Cartesian {
     type Apply<T: ExprCapable> = ConsList<T>;
 }
 
-impl Foldable for ConsList<()> {
+impl Foldable for Cartesian {
     fn foldr<A: ExprCapable, B: ExprCapable>(
     ) -> Expression<FnType<FnType<A, FnType<B, B>>, FnType<B, FnType<Self::Apply<A>, B>>>> {
         Expression::new(FnType::new(|f| {
@@ -92,7 +101,7 @@ impl Foldable for ConsList<()> {
     }
 }
 
-impl Functor for ConsList<()> {
+impl Functor for Cartesian {
     // map f = foldr (\a -> (:) (f a)) []
     fn map<A: ExprCapable, B: ExprCapable>(
     ) -> Expression<FnType<FnType<A, B>, FnType<Self::Apply<A>, Self::Apply<B>>>> {
@@ -110,7 +119,7 @@ impl Functor for ConsList<()> {
     }
 }
 
-impl Applicative for ConsList<()> {
+impl Applicative for Cartesian {
     fn pure<A: ExprCapable>() -> Expression<FnType<A, Self::Apply<A>>> {
         Expression::new(FnType::new(|a| ConsList::Cons {
             head: a,
@@ -143,7 +152,7 @@ impl Applicative for ConsList<()> {
     }
 }
 
-impl Monad for ConsList<()> {
+impl Monad for Cartesian {
     // bind f = join . (map f)
     fn bind<A: ExprCapable, B: ExprCapable>(
     ) -> Expression<FnType<FnType<A, Self::Apply<B>>, FnType<Self::Apply<A>, Self::Apply<B>>>> {
@@ -157,13 +166,13 @@ impl Monad for ConsList<()> {
 
     // join ls = foldr concat [] ls
     fn join<A: ExprCapable>() -> Expression<FnType<Self::Apply<Self::Apply<A>>, Self::Apply<A>>> {
-        ConsList::foldr()
+        Self::foldr()
             .apply(ConsList::concat())
             .apply(ConsList::empty())
     }
 }
 
-impl Traversable for ConsList<()> {
+impl Traversable for Cartesian {
     // traverse f [] = pure []
     // traverse f (a:as) = map2 (:) (f a) (traverse f as)
     fn traverse<F: Applicative, A: ExprCapable, B: ExprCapable>(
@@ -180,6 +189,55 @@ impl Traversable for ConsList<()> {
                         .apply(f.apply(head))
                         .apply(rec.apply(tail))
                         .eval(),
+                })
+            }))
+            .eval()
+        }))
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Pairwise;
+
+impl ExprCapable for Pairwise {}
+
+impl TypeCtor for Pairwise {
+    type Apply<T: ExprCapable> = ConsList<T>;
+}
+
+impl Functor for Pairwise {
+    fn map<A: ExprCapable, B: ExprCapable>(
+    ) -> Expression<FnType<FnType<A, B>, FnType<Self::Apply<A>, Self::Apply<B>>>> {
+        Cartesian::map()
+    }
+}
+
+impl Applicative for Pairwise {
+    fn pure<A: ExprCapable>() -> Expression<FnType<A, Self::Apply<A>>> {
+        crate::repeat()
+    }
+
+    fn map2<A: ExprCapable, B: ExprCapable, C: ExprCapable>() -> Expression<
+        FnType<
+            FnType<A, FnType<B, C>>,
+            FnType<Self::Apply<A>, FnType<Self::Apply<B>, Self::Apply<C>>>,
+        >,
+    > {
+        Expression::new(FnType::new(|f| {
+            Expression::fix(FnType::new(|rec| {
+                FnType::new(|list_a| {
+                    FnType::new(|list_b| {
+                        match (DataExpr::destructure(list_a), DataExpr::destructure(list_b)) {
+                            (
+                                ConsList::Cons { head: a, tail: axs },
+                                ConsList::Cons { head: b, tail: bxs },
+                            ) => ConsList::Cons {
+                                head: f.apply(a).apply(b),
+                                tail: rec.apply(axs).apply(bxs),
+                            },
+                            _ => ConsList::Nil,
+                        }
+                    })
                 })
             }))
             .eval()

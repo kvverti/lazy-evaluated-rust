@@ -1,4 +1,4 @@
-use std::{marker::PhantomData, sync::Arc, fmt::Debug};
+use std::{fmt::Debug, marker::PhantomData, sync::Arc};
 
 use once_cell::sync::Lazy;
 
@@ -148,6 +148,11 @@ impl<T: ExprCapable, R: ExprCapable> Expression<FnType<T, R>> {
             self.eval().0.call(arg)
         })
     }
+
+    /// Compose this function with the given function.
+    pub fn compose<U: ExprCapable>(self, f: Expression<FnType<U, T>>) -> Expression<FnType<U, R>> {
+        Expression::lazy(|| self.eval().compose(f).eval())
+    }
 }
 
 // comparison operators for expressions
@@ -200,8 +205,24 @@ impl<T: ExprCapable, R: ExprCapable> FnType<T, R> {
         Self(Box::new(f))
     }
 
+    /// Lazily call this function with the given argument. When evaluated,
+    /// this evaluates `self` and calls it with `arg`.
     pub fn apply(self, arg: Expression<T>) -> Expression<R> {
-        Expression::lazy(move || self.0.call(arg))
+        Expression::lazy(|| self.0.call(arg))
+    }
+
+    /// Call this function with the given argument. This method uses strict (call-by-value)
+    /// semantics; the argument will always be evaluated.
+    pub fn apply_strict(self, arg: Expression<T>) -> Expression<R> {
+        Expression::lazy(|| {
+            Lazy::force(&arg.value);
+            self.0.call(arg)
+        })
+    }
+
+    /// Compose this function with the given function.
+    pub fn compose<U: ExprCapable>(self, f: Expression<FnType<U, T>>) -> Expression<FnType<U, R>> {
+        Expression::new(FnType::new(|u| self.apply(f.apply(u)).eval()))
     }
 }
 

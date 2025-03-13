@@ -1,9 +1,11 @@
+use std::marker::PhantomData;
+
 use crate::{
     control::{Applicative, Functor, Monad, Traversable, TypeCtor},
     expression::{DataExpr, ExprCapable, Expression, FnType},
 };
 
-use super::{compose::Compose, Associative, Foldable, Monoid, Newtype};
+use super::{compose::Compose, Associative, Foldable, Monoid, Newtype, Type};
 
 #[derive(Debug, Clone)]
 pub enum Maybe<T> {
@@ -18,25 +20,34 @@ impl<T: ExprCapable> DataExpr for Maybe<T> {
     }
 }
 
-impl<T: Associative> Associative for Maybe<T> {
-    fn append() -> Expression<FnType<Self, FnType<Self, Self>>> {
+#[derive(Debug, Clone)]
+pub struct Monoidal<T: Type>(PhantomData<T>);
+
+impl<T: Type> ExprCapable for Monoidal<T> {}
+
+impl<T: Type> Type for Monoidal<T> {
+    type Apply = Maybe<T::Apply>;
+}
+
+impl<T: Associative> Associative for Monoidal<T> {
+    fn append() -> Expression<FnType<Self::Apply, FnType<Self::Apply, Self::Apply>>> {
         Expression::new(FnType::new(|maybe_a| {
             FnType::new(|maybe_b| {
                 match (
                     DataExpr::destructure(maybe_a),
                     DataExpr::destructure(maybe_b),
                 ) {
-                    (Self::Just(a), Self::Just(b)) => Self::Just(T::append().apply(a).apply(b)),
-                    _ => Self::Nothing,
+                    (Maybe::Just(a), Maybe::Just(b)) => Maybe::Just(T::append().apply(a).apply(b)),
+                    _ => Maybe::Nothing,
                 }
             })
         }))
     }
 }
 
-impl<T: Associative> Monoid for Maybe<T> {
-    fn empty() -> Expression<Self> {
-        Expression::new(Self::Nothing)
+impl<T: Associative> Monoid for Monoidal<T> {
+    fn empty() -> Expression<Self::Apply> {
+        Expression::new(Maybe::Nothing)
     }
 }
 

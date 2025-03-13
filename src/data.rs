@@ -20,19 +20,23 @@ pub fn coerce<T: Newtype, U: Newtype<Inner = T::Inner>>() -> Expression<FnType<T
     Expression::new(FnType::new(|t| U::lift(FnType::new(T::unlift).apply(t))))
 }
 
+pub trait Type: ExprCapable {
+    type Apply: ExprCapable;
+}
+
 /// A trait for types that define an associative binary operator.
 /// E.g. addition over the integers or list concatenation.
-pub trait Associative: ExprCapable {
+pub trait Associative: Type {
     /// The associative binary operation.
     // todo: try implementing instances for type tokens that map to the actual type (similar to type constructors)
-    fn append() -> Expression<FnType<Self, FnType<Self, Self>>>;
+    fn append() -> Expression<FnType<Self::Apply, FnType<Self::Apply, Self::Apply>>>;
 }
 
 /// A trait for associative types that also have an identity element.
 pub trait Monoid: Associative {
     /// The identity element of the associative operator. This should satisfy
     /// `append(empty, a) == append(a, empty) == a`.
-    fn empty() -> Expression<Self>;
+    fn empty() -> Expression<Self::Apply>;
 }
 
 pub trait Foldable: TypeCtor {

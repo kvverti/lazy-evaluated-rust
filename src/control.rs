@@ -1,9 +1,17 @@
-use crate::{expression::{ExprCapable, Expression, FnType}, data::Foldable};
+use crate::{
+    data::Foldable,
+    expression::{ExprCapable, Expression, FnType},
+};
 
 pub mod state;
 
+/// Marks a type constructor, an abstraction for a generic type.
 pub trait TypeCtor: ExprCapable {
     type Apply<T: ExprCapable>: ExprCapable;
+}
+
+pub trait TypeCtor2: ExprCapable {
+    type Apply<A: ExprCapable, B: ExprCapable>: ExprCapable;
 }
 
 pub trait Functor: TypeCtor {
@@ -35,15 +43,20 @@ pub trait Monad: Applicative {
         Self::bind().apply(super::id())
     }
 
-    fn sequence<A: ExprCapable, B: ExprCapable>() -> Expression<FnType<Self::Apply<B>, FnType<Self::Apply<A>, Self::Apply<B>>>> {
-        super::compose().apply(Self::bind()).apply(super::constant())
+    fn sequence<A: ExprCapable, B: ExprCapable>(
+    ) -> Expression<FnType<Self::Apply<B>, FnType<Self::Apply<A>, Self::Apply<B>>>> {
+        super::compose()
+            .apply(Self::bind())
+            .apply(super::constant())
     }
 }
 
 pub trait Traversable: Functor + Foldable {
-    fn traverse<F: Applicative, A: ExprCapable, B: ExprCapable>() -> Expression<FnType<FnType<A, F::Apply<B>>, FnType<Self::Apply<A>, F::Apply<Self::Apply<B>>>>>;
+    fn traverse<F: Applicative, A: ExprCapable, B: ExprCapable>(
+    ) -> Expression<FnType<FnType<A, F::Apply<B>>, FnType<Self::Apply<A>, F::Apply<Self::Apply<B>>>>>;
 
-    fn sequence<F: Applicative, A: ExprCapable>() -> Expression<FnType<Self::Apply<F::Apply<A>>, F::Apply<Self::Apply<A>>>> {
+    fn sequence<F: Applicative, A: ExprCapable>(
+    ) -> Expression<FnType<Self::Apply<F::Apply<A>>, F::Apply<Self::Apply<A>>>> {
         Self::traverse::<F, _, _>().apply(super::id())
     }
 }
