@@ -5,7 +5,7 @@ use crate::{
     expression::{DataExpr, ExprCapable, Expression, FnType},
 };
 
-use super::{compose::Compose, Associative, Foldable, Monoid, Newtype, Type};
+use super::{compose::Compose, Associative, Foldable, Monoid, Type};
 
 #[derive(Debug, Clone)]
 pub enum Maybe<T> {
@@ -134,26 +134,24 @@ impl Traversable for Maybe<()> {
 }
 
 /// The Maybe monad transformer, which adds optionality to any given monad.
-pub type MaybeT<M, A> = Compose<M, Maybe<()>, A>;
+pub type MaybeT<M, A> = <Compose<M, Maybe<()>> as TypeCtor>::Apply<A>;
 
-impl<M: Monad> Monad for MaybeT<M, ()> {
+impl<M: Monad> Monad for Compose<M, Maybe<()>> {
     fn bind<A: ExprCapable, B: ExprCapable>(
     ) -> Expression<FnType<FnType<A, Self::Apply<B>>, FnType<Self::Apply<A>, Self::Apply<B>>>> {
         Expression::new(FnType::new(|f| {
             FnType::new(|ma: Expression<MaybeT<M, A>>| {
-                let ma = FnType::new(Newtype::unlift).apply(ma);
-                MaybeT::lift(
-                    M::bind()
-                        .apply(Expression::new(FnType::new(
-                            |maybe_a: Expression<Maybe<A>>| match DataExpr::destructure(maybe_a) {
-                                Maybe::Nothing => {
-                                    M::pure().apply(Expression::new(Maybe::Nothing)).eval()
-                                }
-                                Maybe::Just(a) => MaybeT::unlift(f.apply(a)),
-                            },
-                        )))
-                        .apply(ma),
-                )
+                M::bind()
+                    .apply(Expression::new(FnType::new(
+                        |maybe_a: Expression<Maybe<A>>| match DataExpr::destructure(maybe_a) {
+                            Maybe::Nothing => {
+                                M::pure().apply(Expression::new(Maybe::Nothing)).eval()
+                            }
+                            Maybe::Just(a) => f.apply(a).eval(),
+                        },
+                    )))
+                    .apply(ma)
+                    .eval()
             })
         }))
     }
