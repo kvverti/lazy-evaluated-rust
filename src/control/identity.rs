@@ -1,11 +1,12 @@
 use crate::{
     data::Foldable,
     expression::{ExprCapable, Expression, FnType},
+    fix,
     function::{compose, constant, flip, id},
     Expr,
 };
 
-use super::{Applicative, Comonad, Functor, Monad, Traversable, TypeCtor};
+use super::{Applicative, Comonad, Functor, Monad, MonadFix, Traversable, TypeCtor};
 
 /// The identity monad.
 #[derive(Debug, Clone)]
@@ -61,6 +62,12 @@ impl Monad for Identity {
     fn kleisli<A: ExprCapable, B: ExprCapable, C: ExprCapable>(
     ) -> Expr!((B => Self::Apply<C>) => (A => Self::Apply<B>) => A => Self::Apply<C>) {
         compose()
+    }
+}
+
+impl MonadFix for Identity {
+    fn mfix<A: ExprCapable>() -> Expr!((A => Self::Apply<A>) => Self::Apply<A>) {
+        fix()
     }
 }
 

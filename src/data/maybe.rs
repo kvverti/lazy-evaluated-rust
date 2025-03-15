@@ -1,8 +1,9 @@
 use std::marker::PhantomData;
 
 use crate::{
-    control::{Applicative, Functor, Monad, Traversable, TypeCtor},
+    control::{Applicative, Functor, Monad, MonadFix, Traversable, TypeCtor, Zero},
     expression::{DataExpr, ExprCapable, Expression, FnType},
+    undefined, Expr,
 };
 
 use super::{compose::Compose, Associative, Foldable, Monoid, Type};
@@ -53,6 +54,12 @@ impl<T: Associative> Monoid for Monoidal<T> {
 
 impl TypeCtor for Maybe<()> {
     type Apply<T: ExprCapable> = Maybe<T>;
+}
+
+impl Zero for Maybe<()> {
+    fn zero<A: ExprCapable>() -> Expr!(Self::Apply<A>) {
+        Expression::new(Maybe::Nothing)
+    }
 }
 
 impl Foldable for Maybe<()> {
@@ -116,6 +123,23 @@ impl Monad for Maybe<()> {
                 Maybe::Nothing => Maybe::Nothing,
                 Maybe::Just(a) => f.apply(a).eval(),
             })
+        }))
+    }
+}
+
+impl MonadFix for Maybe<()> {
+    // mfix (a -> (Just a)) = Just a
+    // mfix (_ -> Nothing) = Nothing
+    fn mfix<A: ExprCapable>() -> Expr!((A => Self::Apply<A>) => Self::Apply<A>) {
+        Expression::new(FnType::new(|f| {
+            Expression::fix(FnType::new(|maybe| {
+                f.apply(Expression::lazy(|| match DataExpr::destructure(maybe) {
+                    Maybe::Just(x) => x.eval(),
+                    Maybe::Nothing => undefined().eval(),
+                }))
+                .eval()
+            }))
+            .eval()
         }))
     }
 }

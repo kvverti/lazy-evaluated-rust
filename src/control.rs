@@ -19,6 +19,10 @@ pub trait TypeCtor2: ExprCapable {
     type Apply<A: ExprCapable, B: ExprCapable>: ExprCapable;
 }
 
+pub trait Zero: TypeCtor {
+    fn zero<A: ExprCapable>() -> Expr!(Self::Apply<A>);
+}
+
 pub trait Functor: TypeCtor {
     fn map<A: ExprCapable, B: ExprCapable>() -> Expr!((A => B) => Self::Apply<A> => Self::Apply<B>);
 }
@@ -58,6 +62,10 @@ pub trait Monad: Applicative {
     ) -> Expr!((B => Self::Apply<C>) => (A => Self::Apply<B>) => A => Self::Apply<C>) {
         compose().apply(compose()).apply(Self::bind())
     }
+}
+
+pub trait MonadFix: Monad {
+    fn mfix<A: ExprCapable>() -> Expr!((A => Self::Apply<A>) => Self::Apply<A>);
 }
 
 pub trait Comonad: Functor {
