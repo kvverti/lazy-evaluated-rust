@@ -1,9 +1,11 @@
 use crate::{
+    data::Foldable,
     expression::{ExprCapable, Expression, FnType},
-    function::{constant, id},
+    function::{compose, constant, flip, id},
+    Expr,
 };
 
-use super::{Applicative, Functor, Monad, TypeCtor};
+use super::{Applicative, Comonad, Functor, Monad, Traversable, TypeCtor};
 
 /// The identity monad.
 #[derive(Debug, Clone)]
@@ -54,5 +56,53 @@ impl Monad for Identity {
     fn sequence<A: ExprCapable, B: ExprCapable>(
     ) -> Expression<FnType<Self::Apply<B>, FnType<Self::Apply<A>, Self::Apply<B>>>> {
         constant()
+    }
+
+    fn kleisli<A: ExprCapable, B: ExprCapable, C: ExprCapable>(
+    ) -> Expr!((B => Self::Apply<C>) => (A => Self::Apply<B>) => A => Self::Apply<C>) {
+        compose()
+    }
+}
+
+impl Foldable for Identity {
+    fn foldr<A: ExprCapable, B: ExprCapable>() -> Expr!((A => B => B) => B => Self::Apply<A> => B) {
+        flip()
+    }
+
+    fn foldl_strict<A: ExprCapable, B: ExprCapable>(
+    ) -> Expr!((B => A => B) => B => Self::Apply<A> => B) {
+        id()
+    }
+}
+
+impl Traversable for Identity {
+    fn traverse<F: Applicative, A: ExprCapable, B: ExprCapable>(
+    ) -> Expr!((A => F::Apply<B>) => Self::Apply<A> => F::Apply<Self::Apply<B>>) {
+        id()
+    }
+
+    fn sequence<F: Applicative, A: ExprCapable>(
+    ) -> Expr!(Self::Apply<F::Apply<A>> => F::Apply<Self::Apply<A>>) {
+        id()
+    }
+}
+
+impl Comonad for Identity {
+    fn extract<A: ExprCapable>() -> Expr!(Self::Apply<A> => A) {
+        id()
+    }
+
+    fn extend<A: ExprCapable, B: ExprCapable>(
+    ) -> Expr!((Self::Apply<A> => B) => Self::Apply<A> => Self::Apply<B>) {
+        id()
+    }
+
+    fn duplicate<A: ExprCapable>() -> Expr!(Self::Apply<A> => Self::Apply<Self::Apply<A>>) {
+        id()
+    }
+
+    fn cokleisli<A: ExprCapable, B: ExprCapable, C: ExprCapable>(
+    ) -> Expr!((Self::Apply<B> => C) => (Self::Apply<A> => B) => Self::Apply<A> => C) {
+        compose()
     }
 }

@@ -1,6 +1,6 @@
 use crate::{
     data::Foldable,
-    expression::ExprCapable,
+    expression::{ExprCapable, Expression, FnType},
     function::{compose, constant, id},
     Expr, ExprType,
 };
@@ -21,6 +21,11 @@ pub trait TypeCtor2: ExprCapable {
 
 pub trait Functor: TypeCtor {
     fn map<A: ExprCapable, B: ExprCapable>() -> Expr!((A => B) => Self::Apply<A> => Self::Apply<B>);
+}
+
+pub trait ContraFunctor: TypeCtor {
+    fn contramap<A: ExprCapable, B: ExprCapable>(
+    ) -> Expr!((B => A) => Self::Apply<A> => Self::Apply<B>);
 }
 
 pub trait Applicative: Functor {
@@ -52,6 +57,25 @@ pub trait Monad: Applicative {
     fn kleisli<A: ExprCapable, B: ExprCapable, C: ExprCapable>(
     ) -> Expr!((B => Self::Apply<C>) => (A => Self::Apply<B>) => A => Self::Apply<C>) {
         compose().apply(compose()).apply(Self::bind())
+    }
+}
+
+pub trait Comonad: Functor {
+    fn extract<A: ExprCapable>() -> Expr!(Self::Apply<A> => A);
+
+    fn extend<A: ExprCapable, B: ExprCapable>(
+    ) -> Expr!((Self::Apply<A> => B) => Self::Apply<A> => Self::Apply<B>);
+
+    fn duplicate<A: ExprCapable>() -> Expr!(Self::Apply<A> => Self::Apply<Self::Apply<A>>) {
+        Self::extend().apply(id())
+    }
+
+    // (f =<= g) wa = f (g <<= wa)
+    fn cokleisli<A: ExprCapable, B: ExprCapable, C: ExprCapable>(
+    ) -> Expr!((Self::Apply<B> => C) => (Self::Apply<A> => B) => Self::Apply<A> => C) {
+        Expression::new(FnType::new(|f| {
+            FnType::new(|g| f.compose(Self::extend().apply(g)).eval())
+        }))
     }
 }
 

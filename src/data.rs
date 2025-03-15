@@ -9,6 +9,7 @@ pub mod compose;
 pub mod constant;
 pub mod list;
 pub mod maybe;
+pub mod pair;
 
 #[macro_export]
 macro_rules! Tup {
@@ -70,5 +71,20 @@ pub trait Foldable: TypeCtor {
                 })
             })
         }))
+    }
+
+    // fold_map f = foldr (append . f) empty
+    fn fold_map<M: Monoid, A: ExprCapable>() -> Expr!((A => M::Apply) => Self::Apply<A> => M::Apply)
+    {
+        Expression::new(FnType::new(|f| {
+            Self::foldr()
+                .apply(M::append().compose(f))
+                .apply(M::empty())
+                .eval()
+        }))
+    }
+
+    fn fold<M: Monoid, A: ExprCapable>() -> Expr!(Self::Apply<M::Apply> => M::Apply) {
+        Self::fold_map::<M, _>().apply(id())
     }
 }
