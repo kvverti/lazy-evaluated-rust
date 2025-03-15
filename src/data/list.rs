@@ -57,16 +57,11 @@ impl<T: ExprCapable> Monoid for ConsList<T> {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct Cartesian;
-
-impl ExprCapable for Cartesian {}
-
-impl TypeCtor for Cartesian {
+impl TypeCtor for ConsList<()> {
     type Apply<T: ExprCapable> = ConsList<T>;
 }
 
-impl Foldable for Cartesian {
+impl Foldable for ConsList<()> {
     fn foldr<A: ExprCapable, B: ExprCapable>(
     ) -> Expression<FnType<FnType<A, FnType<B, B>>, FnType<B, FnType<Self::Apply<A>, B>>>> {
         Expression::new(FnType::new(|f| {
@@ -102,7 +97,7 @@ impl Foldable for Cartesian {
     }
 }
 
-impl Functor for Cartesian {
+impl Functor for ConsList<()> {
     // map f = foldr (\a -> (:) (f a)) []
     fn map<A: ExprCapable, B: ExprCapable>(
     ) -> Expression<FnType<FnType<A, B>, FnType<Self::Apply<A>, Self::Apply<B>>>> {
@@ -117,6 +112,45 @@ impl Functor for Cartesian {
                 .apply(ConsList::empty())
                 .eval()
         }))
+    }
+}
+
+impl Traversable for ConsList<()> {
+    // traverse f [] = pure []
+    // traverse f (a:as) = map2 (:) (f a) (traverse f as)
+    fn traverse<F: Applicative, A: ExprCapable, B: ExprCapable>(
+    ) -> Expression<FnType<FnType<A, F::Apply<B>>, FnType<Self::Apply<A>, F::Apply<Self::Apply<B>>>>>
+    {
+        Expression::new(FnType::new(|f| {
+            Expression::fix(FnType::new(|rec| {
+                FnType::new(|ls| match DataExpr::destructure(ls) {
+                    ConsList::Nil => F::pure().apply(ConsList::empty()).eval(),
+                    ConsList::Cons { head, tail } => F::map2()
+                        .apply(Expression::new(FnType::new(|x| {
+                            FnType::new(|xs| ConsList::Cons { head: x, tail: xs })
+                        })))
+                        .apply(f.apply(head))
+                        .apply(rec.apply(tail))
+                        .eval(),
+                })
+            }))
+            .eval()
+        }))
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Cartesian;
+
+impl ExprCapable for Cartesian {}
+
+impl TypeCtor for Cartesian {
+    type Apply<T: ExprCapable> = ConsList<T>;
+}
+
+impl Functor for Cartesian {
+    fn map<A: ExprCapable, B: ExprCapable>() -> Expr!((A => B) => Self::Apply<A> => Self::Apply<B>) {
+        ConsList::map()
     }
 }
 
@@ -167,33 +201,9 @@ impl Monad for Cartesian {
 
     // join ls = foldr concat [] ls
     fn join<A: ExprCapable>() -> Expression<FnType<Self::Apply<Self::Apply<A>>, Self::Apply<A>>> {
-        Self::foldr()
+        ConsList::foldr()
             .apply(ConsList::concat())
             .apply(ConsList::empty())
-    }
-}
-
-impl Traversable for Cartesian {
-    // traverse f [] = pure []
-    // traverse f (a:as) = map2 (:) (f a) (traverse f as)
-    fn traverse<F: Applicative, A: ExprCapable, B: ExprCapable>(
-    ) -> Expression<FnType<FnType<A, F::Apply<B>>, FnType<Self::Apply<A>, F::Apply<Self::Apply<B>>>>>
-    {
-        Expression::new(FnType::new(|f| {
-            Expression::fix(FnType::new(|rec| {
-                FnType::new(|ls| match DataExpr::destructure(ls) {
-                    ConsList::Nil => F::pure().apply(ConsList::empty()).eval(),
-                    ConsList::Cons { head, tail } => F::map2()
-                        .apply(Expression::new(FnType::new(|x| {
-                            FnType::new(|xs| ConsList::Cons { head: x, tail: xs })
-                        })))
-                        .apply(f.apply(head))
-                        .apply(rec.apply(tail))
-                        .eval(),
-                })
-            }))
-            .eval()
-        }))
     }
 }
 
@@ -209,7 +219,7 @@ impl TypeCtor for Pairwise {
 impl Functor for Pairwise {
     fn map<A: ExprCapable, B: ExprCapable>(
     ) -> Expression<FnType<FnType<A, B>, FnType<Self::Apply<A>, Self::Apply<B>>>> {
-        Cartesian::map()
+        ConsList::map()
     }
 }
 
