@@ -1,8 +1,9 @@
 use std::marker::PhantomData;
 
 use crate::{
-    control::{Applicative, Functor, Monad, MonadFix, Traversable, TypeCtor, Zero},
+    control::{Alt, Applicative, Functor, Monad, MonadFix, Traversable, TypeCtor},
     expression::{DataExpr, ExprCapable, Expression, FnType},
+    function::{constant, id},
     undefined, Expr,
 };
 
@@ -56,9 +57,18 @@ impl TypeCtor for Maybe<()> {
     type Apply<T: ExprCapable> = Maybe<T>;
 }
 
-impl Zero for Maybe<()> {
-    fn zero<A: ExprCapable>() -> Expr!(Self::Apply<A>) {
+impl Alt for Maybe<()> {
+    fn none<A: ExprCapable>() -> Expr!(Self::Apply<A>) {
         Expression::new(Maybe::Nothing)
+    }
+
+    // alt (Just a) _ = Just a
+    // alt Nothing x = x
+    fn alt<A: ExprCapable>() -> Expr!(Self::Apply<A> => Self::Apply<A> => Self::Apply<A>) {
+        Expression::new(FnType::new(|maybe| match DataExpr::destructure(maybe) {
+            Maybe::Nothing => id().eval(),
+            Maybe::Just(x) => constant().apply(Expression::new(Maybe::Just(x))).eval(),
+        }))
     }
 }
 

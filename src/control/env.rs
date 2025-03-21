@@ -7,7 +7,7 @@ use crate::{
     Expr,
 };
 
-use super::{identity::Identity, Applicative, Comonad, Functor, Monad, TypeCtor};
+use super::{identity::Identity, Applicative, Comonad, Functor, Monad, MonadFix, TypeCtor};
 
 pub type Env<R> = EnvT<R, Identity>;
 
@@ -70,6 +70,14 @@ impl<R: Type, T: Monad> Monad for EnvT<R, T> {
     fn sequence<A: ExprCapable, B: ExprCapable>(
     ) -> Expr!(Self::Apply<B> => Self::Apply<A> => Self::Apply<B>) {
         combine().apply(T::sequence())
+    }
+}
+
+impl<R: Type, T: MonadFix> MonadFix for EnvT<R, T> {
+    // mfix :: (a -> r -> t a) -> r -> t a
+    // mfix f = T::mfix . flip f
+    fn mfix<A: ExprCapable>() -> Expr!((A => Self::Apply<A>) => Self::Apply<A>) {
+        Expression::new(FnType::new(|f| T::mfix().compose(flip().apply(f)).eval()))
     }
 }
 
