@@ -1,7 +1,7 @@
 use crate::{
     control::{identity::Identity, Alt, Functor, TypeCtor},
     expression::{DataExpr, ExprCapable, Expression, FnType},
-    function::flip,
+    function::{combine, flip},
     Expr,
 };
 
@@ -72,39 +72,37 @@ pub fn repeat<T: Functor, A: ExprCapable>() -> Expr!(T::Apply<A> => StreamT<T, A
     }))
 }
 
-// concat txs tys = alt (map (\(x:txs') -> x : concat txs' tys) txs) tys
+// flipconcat tys = rec0
+//  where rec1 (x:txs') = Cons::new x (rec0 txs')
+//        rec0 = flip alt tys . map rec1
 pub fn concat<T: Functor + Alt, A: ExprCapable>(
 ) -> Expr!(StreamT<T, A> => StreamT<T, A> => StreamT<T, A>) {
-    Expression::fix(FnType::new(|rec| {
-        FnType::new(|stream1| {
-            FnType::new(|stream2| {
-                T::alt()
-                    .apply(
-                        T::map()
-                            .apply(Expression::new(FnType::new({
-                                let stream2 = stream2.clone();
-                                |cons1| {
-                                    let Cons { head, tail } = DataExpr::destructure(cons1);
-                                    Cons {
-                                        head,
-                                        tail: rec.apply(tail).apply(stream2),
-                                    }
-                                }
-                            })))
-                            .apply(stream1),
-                    )
-                    .apply(stream2)
-                    .eval()
-            })
-        })
-    }))
+    flip().apply(Expression::new(FnType::new(|tys| {
+        let fixed = Expression::fix(FnType::new(|rec| {
+            let (rec0, rec1) = DataExpr::destructure(rec);
+            {
+                let rec0_out = flip()
+                    .apply(T::alt())
+                    .apply(tys)
+                    .compose(T::map().apply(rec1));
+                let rec1_out = combine()
+                    .apply(Cons::new())
+                    .apply(Cons::head())
+                    .apply(rec0.compose(Cons::tail()));
+                (rec0_out, rec1_out)
+            }
+        }));
+        let (rec0, _) = DataExpr::destructure(fixed);
+        rec0.eval()
+    })))
 }
 
 pub mod instance {
     use std::marker::PhantomData;
 
     use crate::{
-        control::{Alt, Applicative, Functor, Monad, TypeCtor},
+        control::{identity::Identity, Alt, Applicative, Functor, Monad, Traversable, TypeCtor},
+        data::{pair::fst, Foldable},
         expression::{DataExpr, ExprCapable, Expression, FnType},
         function::{call, combine, flip},
         Expr, ExprType,
@@ -114,6 +112,8 @@ pub mod instance {
 
     #[derive(Debug, Clone)]
     pub struct StreamT<T: TypeCtor>(PhantomData<T>);
+
+    pub type Stream = StreamT<Identity>;
 
     impl<T: TypeCtor> ExprCapable for StreamT<T> {}
     impl<T: TypeCtor> TypeCtor for StreamT<T> {
@@ -137,6 +137,55 @@ pub mod instance {
                         .eval()
                 }))
                 .eval()
+            }))
+        }
+    }
+
+    impl<T: Foldable> Foldable for StreamT<T> {
+        // foldr f = T::foldr (\(x:txs) b -> (f x (Self::foldr f b txs)))
+        // foldr f = rec0
+        //     where rec0 = T::foldr rec
+        //           rec (x:txs) b = f x (rec0 b txs)
+        fn foldr<A: ExprCapable, B: ExprCapable>(
+        ) -> Expr!((A => B => B) => B => Self::Apply<A> => B) {
+            Expression::new(FnType::new(|f| {
+                fst()
+                    .apply(Expression::fix(FnType::new(|rec| {
+                        let (rec0, rec1) = DataExpr::destructure(rec);
+                        let rec0_out = T::foldr().apply(rec1);
+                        let rec1_out = Expression::new(FnType::new(|cons| {
+                            FnType::new(|b| {
+                                let Cons { head, tail } = DataExpr::destructure(cons);
+                                f.apply(head).apply(rec0.apply(b).apply(tail)).eval()
+                            })
+                        }));
+                        (rec0_out, rec1_out)
+                    })))
+                    .eval()
+            }))
+        }
+    }
+
+    impl<T: Traversable> Traversable for StreamT<T> {
+        // traverse f = rec0
+        //  where rec0 = T::traverse rec1
+        //        rec1 (x:txs) = F::map2 Cons::new (f x) (rec0 txs)
+        fn traverse<F: Applicative, A: ExprCapable, B: ExprCapable>(
+        ) -> Expr!((A => F::Apply<B>) => Self::Apply<A> => F::Apply<Self::Apply<B>>) {
+            Expression::new(FnType::new(|f| {
+                fst()
+                    .apply(Expression::fix(FnType::new(|rec| {
+                        let (rec0, rec1) = DataExpr::destructure(rec);
+                        {
+                            let rec0_out = T::traverse::<F, _, _>().apply(rec1);
+                            let rec1_out = combine()
+                                .apply(F::map2().apply(Cons::new()))
+                                .apply(f.compose(Cons::head()))
+                                .apply(rec0.compose(Cons::tail()));
+                            (rec0_out, rec1_out)
+                        }
+                    })))
+                    .eval()
             }))
         }
     }
@@ -267,5 +316,43 @@ pub mod instance {
                     .eval()
             }))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        control::Functor,
+        data::Foldable,
+        expression::{Expression, FnType},
+        undefined,
+    };
+
+    use super::{instance::Stream, Cons};
+
+    #[test]
+    fn test_foldr() {
+        let ascending = Expression::fix(FnType::new(|xs| Cons {
+            head: Expression::new(0i32),
+            tail: Stream::map()
+                .apply(Expression::new(FnType::new(|x| x.eval() + 1)))
+                .apply(xs),
+        }));
+
+        let sum = Stream::foldr()
+            .apply(Expression::new(FnType::new(|x| {
+                FnType::new(|b| {
+                    let elem = x.eval();
+                    if elem <= 10 {
+                        elem + b.eval()
+                    } else {
+                        0
+                    }
+                })
+            })))
+            .apply(undefined())
+            .apply(ascending);
+
+        assert_eq!(sum.eval(), 55); // sum of 0..=10
     }
 }

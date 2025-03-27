@@ -1,7 +1,7 @@
 use crate::{
     data::Foldable,
     expression::{ExprCapable, Expression, FnType},
-    function::{compose, constant, id},
+    function::{compose, constant, id, flip},
     Expr, ExprType,
 };
 
@@ -160,5 +160,17 @@ pub trait Traversable: Functor + Foldable {
     fn sequence<F: Applicative, A: ExprCapable>(
     ) -> Expr!(Self::Apply<F::Apply<A>> => F::Apply<Self::Apply<A>>) {
         Self::traverse::<F, _, _>().apply(id())
+    }
+}
+
+pub trait Profunctor: TypeCtor2 {
+    fn dimap<A1: ExprCapable, A2: ExprCapable, B1: ExprCapable, B2: ExprCapable>() -> Expr!((A2 => A1) => (B1 => B2) => Self::Apply<A1, B1> => Self::Apply<A2, B2>);
+
+    fn map_left<A: ExprCapable, B: ExprCapable, C: ExprCapable>() -> Expr!((B => A) => Self::Apply<A, C> => Self::Apply<B, C>) {
+        flip().apply(Self::dimap()).apply(id())
+    }
+
+    fn map_right<A: ExprCapable, B: ExprCapable, C: ExprCapable>() -> Expr!((A => B) => Self::Apply<C, A> => Self::Apply<C, B>) {
+        Self::dimap().apply(id())
     }
 }

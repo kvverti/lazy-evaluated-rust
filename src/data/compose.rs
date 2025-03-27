@@ -5,7 +5,7 @@ use crate::{
     expression::{ExprCapable, Expression, FnType},
 };
 
-/// A composition of two type constructors.
+/// A composition of two functors, which is also a functor. If both are applicative, the composition is also applicative.
 #[derive(Debug, Clone)]
 pub struct Compose<F: TypeCtor, G: TypeCtor>(PhantomData<(F, G)>);
 
