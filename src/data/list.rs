@@ -19,16 +19,12 @@ pub enum ConsList<T> {
 
 impl<T: ExprCapable> ConsList<T> {
     pub fn concat() -> Expr!(Self => Self => Self) {
-        Expression::fix(FnType::new(|rec| {
-            FnType::new(|list_a| {
-                FnType::new(|list_b| match DataExpr::destructure(list_a) {
-                    ConsList::Nil => list_b.eval(),
-                    ConsList::Cons { head, tail } => ConsList::Cons {
-                        head,
-                        tail: rec.apply(tail).apply(list_b),
-                    },
-                })
-            })
+        Expression::fix(crate::fun!(|rec, list_a, list_b| match DataExpr::destructure(list_a) {
+            ConsList::Nil => list_b.eval(),
+            ConsList::Cons { head, tail } => ConsList::Cons {
+                head,
+                tail: rec.apply(tail).apply(list_b),
+            },
         }))
     }
 }

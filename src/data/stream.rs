@@ -32,8 +32,8 @@ impl<T: TypeCtor, A: ExprCapable> DataExpr for Cons<T, A> {
     fn destructure(v: Expression<Self>) -> Self {
         let v1 = v.clone();
         Self {
-            head: Expression::lazy(move || v.eval().head.eval()),
-            tail: Expression::lazy(move || v1.eval().tail.eval()),
+            head: Expression::lazy(|| v.eval().head.eval()),
+            tail: Expression::lazy(|| v1.eval().tail.eval()),
         }
     }
 }
@@ -78,22 +78,11 @@ pub fn repeat<T: Functor, A: ExprCapable>() -> Expr!(T::Apply<A> => StreamT<T, A
 pub fn concat<T: Functor + Alt, A: ExprCapable>(
 ) -> Expr!(StreamT<T, A> => StreamT<T, A> => StreamT<T, A>) {
     flip().apply(Expression::new(FnType::new(|tys| {
-        let fixed = Expression::fix(FnType::new(|rec| {
-            let (rec0, rec1) = DataExpr::destructure(rec);
-            {
-                let rec0_out = flip()
-                    .apply(T::alt())
-                    .apply(tys)
-                    .compose(T::map().apply(rec1));
-                let rec1_out = combine()
-                    .apply(Cons::new())
-                    .apply(Cons::head())
-                    .apply(rec0.compose(Cons::tail()));
-                (rec0_out, rec1_out)
-            }
-        }));
-        let (rec0, _) = DataExpr::destructure(fixed);
-        rec0.eval()
+        crate::letrec! {
+            rec0 = flip().apply(T::alt()).apply(tys).compose(T::map().apply(rec1));
+            rec1 = combine().apply(Cons::new()).apply(Cons::head()).apply(rec0.compose(Cons::tail()));
+            => rec0.eval()
+        }
     })))
 }
 

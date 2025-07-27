@@ -2,6 +2,8 @@ use std::{fmt::Debug, marker::PhantomData, sync::Arc};
 
 use once_cell::sync::Lazy;
 
+mod macros;
+
 /// Trait for any type that supports being lazily evaluated.
 /// This includes types that have no internal structure as well
 /// as user-defined types that contain Expressions.
@@ -21,7 +23,7 @@ macro_rules! impl_primitive {
     };
 }
 
-impl_primitive!(() u8 i8 u16 i16 u32 i32 u64 i64 u128 i128 usize isize char);
+impl_primitive!(() u8 i8 u16 i16 u32 i32 u64 i64 u128 i128 usize isize char bool);
 
 macro_rules! impl_tuple {
     ($($t:ident $n:tt)*) => {
