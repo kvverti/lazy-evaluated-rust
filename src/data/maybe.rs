@@ -4,7 +4,7 @@ use crate::{
     control::{Alt, Applicative, Functor, Monad, MonadFix, Traversable, TypeCtor},
     expression::{DataExpr, ExprCapable, Expression, FnType},
     function::{constant, id},
-    undefined, Expr,
+    mdo, undefined, Expr,
 };
 
 use super::{compose::Compose, Associative, Foldable, Monoid, Type};
@@ -175,17 +175,14 @@ impl<M: Monad> Monad for Compose<M, Maybe<()>> {
     ) -> Expression<FnType<FnType<A, Self::Apply<B>>, FnType<Self::Apply<A>, Self::Apply<B>>>> {
         Expression::new(FnType::new(|f| {
             FnType::new(|ma: Expression<MaybeT<M, A>>| {
-                M::bind()
-                    .apply(Expression::new(FnType::new(
-                        |maybe_a: Expression<Maybe<A>>| match DataExpr::destructure(maybe_a) {
-                            Maybe::Nothing => {
-                                M::pure().apply(Expression::new(Maybe::Nothing)).eval()
-                            }
-                            Maybe::Just(a) => f.apply(a).eval(),
-                        },
-                    )))
-                    .apply(ma)
-                    .eval()
+                mdo! { M;
+                    let maybe = ma;
+                    match DataExpr::destructure(maybe) {
+                        Maybe::Nothing => M::pure().apply_value(Maybe::Nothing),
+                        Maybe::Just(a) => f.apply(a)
+                    }
+                }
+                .eval()
             })
         }))
     }

@@ -35,28 +35,28 @@ macro_rules! __opt_ty {
 }
 
 /// Defines a collection of mutually recursive bindings and constructs an expression using them.
-/// 
+///
 /// ## Usage
 /// ```
 /// use lazy::expression::Expression;
 /// use lazy::{letrec, fun};
-/// 
+///
 /// let x = letrec! {
-///     even = Expression::new(fun!(|n| match n.eval_ref() {
+///     let even = Expression::new(fun!(|n| match n.eval() {
 ///         0 => true,
-///         _ => odd.apply(n.map(|n| n - 1)).eval(),
+///         n => odd.apply_value(n - 1).eval()
 ///     }));
-///     odd = Expression::new(fun!(|n| match n.eval_ref() {
+///     let odd = Expression::new(fun!(|n| match n.eval() {
 ///         0 => false,
-///         _ => even.apply(n.map(|n| n - 1)).eval(),
+///         n => even.apply_value(n - 1).eval(),
 ///     }));
-///     => even.apply(Expression::new(10u32)).eval()
+///     even.apply_value(10u32).eval()
 /// };
 /// assert_eq!(x, true);
 /// ```
 #[macro_export]
 macro_rules! letrec {
-    ($($var:ident $(: $ty:ty)? = $init:expr;)+ => $value:expr) => {
+    ($(let $var:ident $(: $ty:ty)? = $init:expr;)+ $value:expr) => {
         {
             $crate::__create_letrec_struct!($($var)*);
             #[allow(unused)]
@@ -77,13 +77,13 @@ macro_rules! letrec {
 #[macro_export]
 macro_rules! __fntype {
     ($($move:ident)? [$arg:tt $($ty:ty)?] -> $ret:ty $body:block) => {
-        $crate::expression::FnType::new($($move)? |$arg $(: $crate::expression::Expression<$ty>)?| -> $ret { $body })
+        $crate::expression::FnType::new($($move)? |$arg: $crate::expression::Expression<$crate::__opt_ty!($($ty)?)>| -> $ret { $body })
     };
     ($($move:ident)? [$arg:tt $($ty:ty)?] $body:expr) => {
-        $crate::expression::FnType::new($($move)? |$arg $(: $crate::expression::Expression<$ty>)?| $body)
+        $crate::expression::FnType::new($($move)? |$arg: $crate::expression::Expression<$crate::__opt_ty!($($ty)?)>| $body)
     };
     ($($move:ident)? [$arg:tt $($ty:ty)?] $($tail:tt)+) => {
-        $crate::expression::FnType::new($($move)? |$arg $(: $crate::expression::Expression<$ty>)?| $crate::__fntype!($($move)? $($tail)+))
+        $crate::expression::FnType::new($($move)? |$arg: $crate::expression::Expression<$crate::__opt_ty!($($ty)?)>| $crate::__fntype!($($move)? $($tail)+))
     };
 }
 
@@ -104,6 +104,46 @@ macro_rules! fun {
     };
 }
 
+/// Monadic do-notation.
+#[macro_export]
+macro_rules! mdo {
+    ($monad:ty; let $var:ident $(: $ty:ty)? = $init:expr; $($rest:tt)+) => {
+        <$monad as $crate::control::Monad>::bind()
+            .apply_value($crate::fun! {
+                |$var $(: $ty)?| { $crate::mdo!($monad; $($rest)+).eval() }
+            })
+            .apply($init)
+    };
+    ($monad:ty; let _ = $init:expr; $($rest:tt)+) => {
+        <$monad as $crate::control::Monad>::sequence()
+            .apply({ $crate::mdo!($monad; $($rest)+) })
+            .apply($init)
+    };
+    ($monad:ty; let $($pat:tt)+ $(: $ty:ty)? = $init:expr; $($rest:tt)+) => {
+        <$monad as $crate::control::Monad>::bind()
+            .apply_value($crate::fun! {
+                |input $(: $ty)?| {
+                    let $($pat)+ = $crate::expression::DataExpr::destructure(input);
+                    { $crate::mdo!($monad; $($rest)+) }.eval()
+                }
+            })
+            .apply($init)
+    };
+    ($monad:ty; $init:expr; $($rest:tt)+) => {
+        <$monad as $crate::control::Monad>::sequence()
+            .apply({ $crate::mdo!($monad; $($rest)+) })
+            .apply($init)
+    };
+    ($monad:ty; $init:expr;) => {
+        <$monad as $crate::control::Functor>::map()
+            .apply($crate::function::constant().apply_value(()))
+            .apply($init)
+    };
+    ($monad:ty; $init:expr) => {
+        $init
+    };
+}
+
 #[cfg(test)]
 mod tests {
     use crate::expression::Expression;
@@ -111,15 +151,11 @@ mod tests {
     #[test]
     fn arithmetic() {
         let x = letrec! {
-            fact: crate::ExprType!(u128 => u128) = Expression::new(crate::fun!(|n| {
-                let n = n.eval();
-                if n < 2 {
-                    1
-                } else {
-                    n * fact.apply(Expression::new(n - 1)).eval()
-                }
+            let fact: crate::ExprType!(u128 => u128) = Expression::new(crate::fun!(|n| match n.eval() {
+                0 | 1 => 1,
+                n => n * fact.apply_value(n - 1).eval(),
             }));
-            => fact.apply(Expression::new(5)).eval()
+            fact.apply_value(5).eval()
         };
         assert_eq!(x, 120);
     }

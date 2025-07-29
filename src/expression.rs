@@ -3,6 +3,7 @@ use std::{fmt::Debug, marker::PhantomData, sync::Arc};
 use once_cell::sync::Lazy;
 
 mod macros;
+pub mod ops;
 
 /// Trait for any type that supports being lazily evaluated.
 /// This includes types that have no internal structure as well
@@ -165,6 +166,12 @@ impl<T: ExprCapable, R: ExprCapable> Expression<FnType<T, R>> {
             Lazy::force(&arg.value);
             self.eval().call(arg)
         })
+    }
+
+    /// Call this function with a plain value as an argument. This is a shorthand for [`Self::apply_strict`]
+    /// when the argument is a constant.
+    pub fn apply_value(self, arg: T) -> Expression<R> {
+        self.apply(Expression::new(arg))
     }
 
     /// Compose this function with the given function.

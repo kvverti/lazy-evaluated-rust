@@ -1,8 +1,9 @@
 use crate::{
     control::{identity::Identity, Alt, Functor, TypeCtor},
     expression::{DataExpr, ExprCapable, Expression, FnType},
+    fun,
     function::{combine, flip},
-    Expr,
+    letrec, Expr,
 };
 
 use super::maybe::Maybe;
@@ -40,7 +41,7 @@ impl<T: TypeCtor, A: ExprCapable> DataExpr for Cons<T, A> {
 
 impl<T: TypeCtor, A: ExprCapable> Cons<T, A> {
     pub fn new() -> Expr!(A => StreamT<T, A> => Self) {
-        Expression::new(FnType::new(|head| FnType::new(|tail| Self { head, tail })))
+        Expression::new(fun!(|head, tail| Self { head, tail }))
     }
 
     pub fn head() -> Expr!(Self => A) {
@@ -78,10 +79,10 @@ pub fn repeat<T: Functor, A: ExprCapable>() -> Expr!(T::Apply<A> => StreamT<T, A
 pub fn concat<T: Functor + Alt, A: ExprCapable>(
 ) -> Expr!(StreamT<T, A> => StreamT<T, A> => StreamT<T, A>) {
     flip().apply(Expression::new(FnType::new(|tys| {
-        crate::letrec! {
-            rec0 = flip().apply(T::alt()).apply(tys).compose(T::map().apply(rec1));
-            rec1 = combine().apply(Cons::new()).apply(Cons::head()).apply(rec0.compose(Cons::tail()));
-            => rec0.eval()
+        letrec! {
+            let rec0 = flip().apply(T::alt()).apply(tys).compose(T::map().apply(rec1));
+            let rec1 = combine().apply(Cons::new()).apply(Cons::head()).apply(rec0.compose(Cons::tail()));
+            rec0.eval()
         }
     })))
 }
@@ -91,10 +92,11 @@ pub mod instance {
 
     use crate::{
         control::{identity::Identity, Alt, Applicative, Functor, Monad, Traversable, TypeCtor},
-        data::{pair::fst, Foldable},
+        data::Foldable,
         expression::{DataExpr, ExprCapable, Expression, FnType},
+        fun,
         function::{call, combine, flip},
-        Expr, ExprType,
+        letrec, Expr, ExprType,
     };
 
     use super::{concat, repeat, Cons};
@@ -138,19 +140,14 @@ pub mod instance {
         fn foldr<A: ExprCapable, B: ExprCapable>(
         ) -> Expr!((A => B => B) => B => Self::Apply<A> => B) {
             Expression::new(FnType::new(|f| {
-                fst()
-                    .apply(Expression::fix(FnType::new(|rec| {
-                        let (rec0, rec1) = DataExpr::destructure(rec);
-                        let rec0_out = T::foldr().apply(rec1);
-                        let rec1_out = Expression::new(FnType::new(|cons| {
-                            FnType::new(|b| {
-                                let Cons { head, tail } = DataExpr::destructure(cons);
-                                f.apply(head).apply(rec0.apply(b).apply(tail)).eval()
-                            })
-                        }));
-                        (rec0_out, rec1_out)
-                    })))
-                    .eval()
+                letrec! {
+                    let rec0 = T::foldr().apply(rec1);
+                    let rec1 = Expression::new(fun!(|cons, b| {
+                        let Cons { head, tail } = DataExpr::destructure(cons);
+                        f.apply(head).apply(rec0.apply(b).apply(tail)).eval()
+                    }));
+                    rec0.eval()
+                }
             }))
         }
     }
@@ -162,19 +159,14 @@ pub mod instance {
         fn traverse<F: Applicative, A: ExprCapable, B: ExprCapable>(
         ) -> Expr!((A => F::Apply<B>) => Self::Apply<A> => F::Apply<Self::Apply<B>>) {
             Expression::new(FnType::new(|f| {
-                fst()
-                    .apply(Expression::fix(FnType::new(|rec| {
-                        let (rec0, rec1) = DataExpr::destructure(rec);
-                        {
-                            let rec0_out = T::traverse::<F, _, _>().apply(rec1);
-                            let rec1_out = combine()
-                                .apply(F::map2().apply(Cons::new()))
-                                .apply(f.compose(Cons::head()))
-                                .apply(rec0.compose(Cons::tail()));
-                            (rec0_out, rec1_out)
-                        }
-                    })))
-                    .eval()
+                letrec! {
+                    let rec0 = T::traverse::<F, _, _>().apply(rec1);
+                    let rec1 = combine()
+                        .apply(F::map2().apply(Cons::new()))
+                        .apply(f.compose(Cons::head()))
+                        .apply(rec0.compose(Cons::tail()));
+                    rec0.eval()
+                }
             }))
         }
     }
@@ -204,29 +196,26 @@ pub mod instance {
         fn map2<A: ExprCapable, B: ExprCapable, C: ExprCapable>(
         ) -> Expr!((A => B => C) => Self::Apply<A> => Self::Apply<B> => Self::Apply<C>) {
             Expression::new(FnType::new(|f| {
-                Expression::fix(FnType::new(|rec| {
-                    T::map2()
-                        .apply(Expression::new(FnType::new(|cons_a| {
-                            FnType::new(|cons_b| {
-                                let (
-                                    Cons {
-                                        head: head_a,
-                                        tail: tail_a,
-                                    },
-                                    Cons {
-                                        head: head_b,
-                                        tail: tail_b,
-                                    },
-                                ) = (DataExpr::destructure(cons_a), DataExpr::destructure(cons_b));
-                                Cons {
-                                    head: f.apply(head_a).apply(head_b),
-                                    tail: rec.apply(tail_a).apply(tail_b),
-                                }
-                            })
-                        })))
-                        .eval()
-                }))
-                .eval()
+                letrec! {
+                    let helper = Expression::new(fun!(|cons_a, cons_b| {
+                        let (
+                            Cons {
+                                head: head_a,
+                                tail: tail_a,
+                            },
+                            Cons {
+                                head: head_b,
+                                tail: tail_b,
+                            },
+                        ) = (DataExpr::destructure(cons_a), DataExpr::destructure(cons_b));
+                        Cons {
+                            head: f.apply(head_a).apply(head_b),
+                            tail: result.apply(tail_a).apply(tail_b),
+                        }
+                    }));
+                    let result = T::map2().apply(helper);
+                    result.eval()
+                }
             }))
         }
     }
