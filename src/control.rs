@@ -1,8 +1,5 @@
 use crate::{
-    data::Foldable,
-    expression::{ExprCapable, Expression, FnType},
-    function::{compose, constant, id, flip},
-    Expr, ExprType,
+    Expr, ExprType, data::Foldable, expression::ExprCapable, function::{compose, constant, flip, id}, funexp,
 };
 
 pub mod env;
@@ -94,7 +91,7 @@ pub trait Monad: Applicative {
     /// Combines two contexts while ignoring any underlying values.
     fn sequence<A: ExprCapable, B: ExprCapable>(
     ) -> Expr!(Self::Apply<B> => Self::Apply<A> => Self::Apply<B>) {
-        compose().apply(Self::bind()).apply(constant())
+        Self::bind().compose(constant())
     }
 
     /// Implements monadic function composition.
@@ -105,7 +102,7 @@ pub trait Monad: Applicative {
     // (f <=< g) a = f =<< g a
     fn kleisli<A: ExprCapable, B: ExprCapable, C: ExprCapable>(
     ) -> Expr!((B => Self::Apply<C>) => (A => Self::Apply<B>) => A => Self::Apply<C>) {
-        compose().apply(compose()).apply(Self::bind())
+        compose().compose(Self::bind())
     }
 }
 
@@ -146,9 +143,7 @@ pub trait Comonad: Functor {
     // (f =<= g) wa = f (g <<= wa)
     fn cokleisli<A: ExprCapable, B: ExprCapable, C: ExprCapable>(
     ) -> Expr!((Self::Apply<B> => C) => (Self::Apply<A> => B) => Self::Apply<A> => C) {
-        Expression::new(FnType::new(|f| {
-            FnType::new(|g| f.compose(Self::extend().apply(g)).eval())
-        }))
+        funexp!(|f, g| f.compose(Self::extend().apply(g)).eval())
     }
 }
 

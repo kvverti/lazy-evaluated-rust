@@ -41,7 +41,7 @@ macro_rules! __opt_ty {
 /// use lazy::expression::Expression;
 /// use lazy::{letrec, fun};
 ///
-/// let x = letrec! {
+/// let x = letrec!({
 ///     let even = Expression::new(fun!(|n| match n.eval() {
 ///         0 => true,
 ///         n => odd.apply_value(n - 1).eval()
@@ -51,12 +51,12 @@ macro_rules! __opt_ty {
 ///         n => even.apply_value(n - 1).eval(),
 ///     }));
 ///     even.apply_value(10u32).eval()
-/// };
+/// });
 /// assert_eq!(x, true);
 /// ```
 #[macro_export]
 macro_rules! letrec {
-    ($(let $var:ident $(: $ty:ty)? = $init:expr;)+ $value:expr) => {
+    ({$(let $var:ident $(: $ty:ty)? = $init:expr;)+ $value:expr}) => {
         {
             $crate::__create_letrec_struct!($($var)*);
             #[allow(unused)]
@@ -76,10 +76,10 @@ macro_rules! letrec {
 #[doc(hidden)]
 #[macro_export]
 macro_rules! __fntype {
-    ($($move:ident)? [$arg:tt $($ty:ty)?] -> $ret:ty $body:block) => {
+    ($($move:ident)? [$arg:tt $($ty:ty)?] ; -> $ret:ty $body:block) => {
         $crate::expression::FnType::new($($move)? |$arg: $crate::expression::Expression<$crate::__opt_ty!($($ty)?)>| -> $ret { $body })
     };
-    ($($move:ident)? [$arg:tt $($ty:ty)?] $body:expr) => {
+    ($($move:ident)? [$arg:tt $($ty:ty)?] ; $body:expr) => {
         $crate::expression::FnType::new($($move)? |$arg: $crate::expression::Expression<$crate::__opt_ty!($($ty)?)>| $body)
     };
     ($($move:ident)? [$arg:tt $($ty:ty)?] $($tail:tt)+) => {
@@ -87,7 +87,7 @@ macro_rules! __fntype {
     };
 }
 
-/// Create a function expression from a closure.
+/// Create a function from a closure.
 ///
 /// ## Usage
 /// ```
@@ -100,63 +100,69 @@ macro_rules! __fntype {
 #[macro_export]
 macro_rules! fun {
     ($($move:ident)? | $($args:tt $(: $ty:ty)?),* $(,)? | $($body:tt)*) => {
-        $crate::__fntype!($($move)? $([$args $($ty)?])* $($body)*)
+        $crate::__fntype!($($move)? $([$args $($ty)?])* ; $($body)*)
+    };
+}
+
+/// Create a function expression from a closure.
+#[macro_export]
+macro_rules! funexp {
+    ($($t:tt)*) => {
+        $crate::expression::Expression::new($crate::fun!($($t)*))
     };
 }
 
 /// Monadic do-notation.
 #[macro_export]
 macro_rules! mdo {
-    ($monad:ty; let $var:ident $(: $ty:ty)? = $init:expr; $($rest:tt)+) => {
+    ({use $monad:path; let $var:ident $(: $ty:ty)? = $init:expr; $($rest:tt)+}) => {
         <$monad as $crate::control::Monad>::bind()
             .apply_value($crate::fun! {
-                |$var $(: $ty)?| { $crate::mdo!($monad; $($rest)+).eval() }
+                |$var $(: $ty)?| { $crate::mdo!({use $monad; $($rest)+}).eval() }
             })
             .apply($init)
     };
-    ($monad:ty; let _ = $init:expr; $($rest:tt)+) => {
+    ({use $monad:path; let _ = $init:expr; $($rest:tt)+}) => {
         <$monad as $crate::control::Monad>::sequence()
-            .apply({ $crate::mdo!($monad; $($rest)+) })
+            .apply({ $crate::mdo!({use $monad; $($rest)+}) })
             .apply($init)
     };
-    ($monad:ty; let $($pat:tt)+ $(: $ty:ty)? = $init:expr; $($rest:tt)+) => {
+    ({use $monad:path; let $($pat:tt)+ $(: $ty:ty)? = $init:expr; $($rest:tt)+}) => {
         <$monad as $crate::control::Monad>::bind()
             .apply_value($crate::fun! {
                 |input $(: $ty)?| {
                     let $($pat)+ = $crate::expression::DataExpr::destructure(input);
-                    { $crate::mdo!($monad; $($rest)+) }.eval()
+                    { $crate::mdo!({use $monad; $($rest)+}) }.eval()
                 }
             })
             .apply($init)
     };
-    ($monad:ty; $init:expr; $($rest:tt)+) => {
+    ({use $monad:path; $init:expr; $($rest:tt)+}) => {
         <$monad as $crate::control::Monad>::sequence()
-            .apply({ $crate::mdo!($monad; $($rest)+) })
+            .apply({ $crate::mdo!({use $monad; $($rest)+}) })
             .apply($init)
     };
-    ($monad:ty; $init:expr;) => {
+    ({use $monad:path; $init:expr;}) => {
         <$monad as $crate::control::Functor>::map()
             .apply($crate::function::constant().apply_value(()))
             .apply($init)
     };
-    ($monad:ty; $init:expr) => {
+    ({use $monad:path; $init:expr}) => {
         $init
     };
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::expression::Expression;
-
     #[test]
     fn arithmetic() {
-        let x = letrec! {
-            let fact: crate::ExprType!(u128 => u128) = Expression::new(crate::fun!(|n| match n.eval() {
+        let x = letrec!({
+            let fact: crate::ExprType!(u128 => u128) = crate::funexp!(|n| match n.eval() {
                 0 | 1 => 1,
                 n => n * fact.apply_value(n - 1).eval(),
-            }));
+            });
             fact.apply_value(5).eval()
-        };
+        });
         assert_eq!(x, 120);
     }
 }

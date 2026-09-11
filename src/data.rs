@@ -1,8 +1,9 @@
 use crate::{
+    Expr,
     control::TypeCtor,
     expression::{ExprCapable, Expression, FnType},
     function::id,
-    Expr,
+    funexp,
 };
 
 pub mod compose;
@@ -54,35 +55,27 @@ pub trait Monoid: Associative {
 pub trait Foldable: TypeCtor {
     fn foldr<A: ExprCapable, B: ExprCapable>() -> Expr!((A => B => B) => B => Self::Apply<A> => B);
 
-    fn foldl_strict<A: ExprCapable, B: ExprCapable>(
-    ) -> Expr!((B => A => B) => B => Self::Apply<A> => B) {
-        Expression::new(FnType::new(|f| {
-            FnType::new(|b| {
-                FnType::new(|this| {
-                    Self::foldr()
-                        .apply(Expression::new(FnType::new(|a| {
-                            FnType::new(|g| {
-                                FnType::new(|b| g.apply_strict(f.apply(b).apply(a)).eval())
-                            })
-                        })))
-                        .apply(id())
-                        .apply(this)
-                        .apply(b)
-                        .eval()
-                })
-            })
-        }))
+    fn foldl_strict<A: ExprCapable, B: ExprCapable>()
+    -> Expr!((B => A => B) => B => Self::Apply<A> => B) {
+        funexp!(|f, b, this| Self::foldr()
+            .apply(funexp!(|a, g, b| g
+                .apply_strict(f.apply(b).apply(a))
+                .eval()))
+            .apply(id())
+            .apply(this)
+            .apply(b)
+            .eval())
     }
 
     // fold_map f = foldr (append . f) empty
     fn fold_map<M: Monoid, A: ExprCapable>() -> Expr!((A => M::Apply) => Self::Apply<A> => M::Apply)
     {
-        Expression::new(FnType::new(|f| {
+        funexp!(|f| {
             Self::foldr()
                 .apply(M::append().compose(f))
                 .apply(M::empty())
                 .eval()
-        }))
+        })
     }
 
     fn fold<M: Monoid, A: ExprCapable>() -> Expr!(Self::Apply<M::Apply> => M::Apply) {
