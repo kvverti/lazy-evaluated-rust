@@ -127,11 +127,11 @@ macro_rules! mdo {
             .apply({ $crate::mdo!({use $monad; $($rest)+}) })
             .apply($init)
     };
-    ({use $monad:path; let $($pat:tt)+ $(: $ty:ty)? = $init:expr; $($rest:tt)+}) => {
+    ({use $monad:path; let pat!($pat:pat) $(: $ty:ty)? = $init:expr; $($rest:tt)+}) => {
         <$monad as $crate::control::Monad>::bind()
             .apply_value($crate::fun! {
                 |input $(: $ty)?| {
-                    let $($pat)+ = $crate::expression::DataExpr::destructure(input);
+                    let $pat = $crate::expression::DataExpr::destructure(input);
                     { $crate::mdo!({use $monad; $($rest)+}) }.eval()
                 }
             })
