@@ -1,15 +1,16 @@
 use std::marker::PhantomData;
 
 use crate::{
-    data::{
-        pair::{map2_pair, map_fst, map_snd, pair},
-        Monoid, Type,
-    },
-    expression::{DataExpr, ExprCapable, Expression, FnType},
     Expr, Tup,
+    data::{
+        Monoid, Type,
+        pair::{map_snd, map2_pair, pair},
+    },
+    expression::{ExprCapable, Expression, FnType},
+    funexp, mdo,
 };
 
-use super::{identity::Identity, Applicative, Functor, Monad, TypeCtor};
+use super::{Applicative, Functor, Monad, TypeCtor, identity::Identity};
 
 /// The writer monad.
 #[derive(Debug, Clone)]
@@ -24,8 +25,8 @@ impl<C: Type, T: TypeCtor> TypeCtor for WriteT<C, T> {
 
 impl<C: Type, T: Functor> Functor for WriteT<C, T> {
     // map f = map (map_snd f)
-    fn map<A: ExprCapable, B: ExprCapable>(
-    ) -> Expression<FnType<FnType<A, B>, FnType<Self::Apply<A>, Self::Apply<B>>>> {
+    fn map<A: ExprCapable, B: ExprCapable>()
+    -> Expression<FnType<FnType<A, B>, FnType<Self::Apply<A>, Self::Apply<B>>>> {
         T::map().compose(map_snd())
     }
 }
@@ -50,19 +51,14 @@ impl<CO: Monoid, T: Applicative> Applicative for WriteT<CO, T> {
 impl<C: Monoid, T: Monad> Monad for WriteT<C, T> {
     // bind f (s, a) = let (s', b) = f a in (s <> s', b)
     // bind f msa = do (s, a) <- msa; (s', b) <- f a; pure (s <> s', b)
-    // bind f = bind (\(s, a) -> map (map_fst (append s)) (f a))
-    fn bind<A: ExprCapable, B: ExprCapable>(
-    ) -> Expr!((A => Self::Apply<B>) => Self::Apply<A> => Self::Apply<B>) {
-        Expression::new(FnType::new(|f| {
-            T::bind()
-                .apply(Expression::new(FnType::new(|pair| {
-                    let (c, a) = DataExpr::destructure(pair);
-                    T::map()
-                        .apply(map_fst().apply(C::append().apply(c)))
-                        .apply(f.apply(a))
-                        .eval()
-                })))
-                .eval()
-        }))
+    fn bind<A: ExprCapable, B: ExprCapable>()
+    -> Expr!((A => Self::Apply<B>) => Self::Apply<A> => Self::Apply<B>) {
+        funexp!(|f, ma| mdo!({
+            use T;
+            let pat!((c1, a)) = ma;
+            let pat!((c2, b)) = f.apply(a);
+            T::pure().apply_value((C::append().apply(c1).apply(c2), b))
+        })
+        .eval())
     }
 }
