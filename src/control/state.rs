@@ -5,7 +5,7 @@ use crate::{
     control::{Applicative, Monad, MonadFix},
     data::{
         Type,
-        pair::{Pair, map_snd},
+        pair::{Pair, map_snd, snd},
     },
     expression::{ExprCapable, Expression, FnType},
     fun,
@@ -51,9 +51,9 @@ impl<S: Type, T: Monad> Applicative for StateT<S, T> {
     -> Expr!((A => B => C) => Self::Apply<A> => Self::Apply<B> => Self::Apply<C>) {
         funexp!(|f, sta, stb, s| mdo!({
             use T;
-            let pat!((s1, a)) = sta.apply(s);
-            let pat!((s2, b)) = stb.apply(s1);
-            T::pure().apply_value((s2, f.apply(a).apply(b)))
+            let pat!((s, a)) = sta.apply(s);
+            let pat!((s, b)) = stb.apply(s);
+            T::pure().apply_value((s, f.apply(a).apply(b)))
         })
         .eval())
     }
@@ -74,15 +74,11 @@ impl<S: Type, T: Monad> Monad for StateT<S, T> {
 }
 
 // mfix :: (a -> s -> (s, a)) -> s -> (s, a)
-// mfix f = fix (\st s -> let (s', a) = st s; f a s')
-impl<S: Type, T: Monad> MonadFix for StateT<S, T> {
+// mfix f s = fix (\(_, a) -> f a s)
+impl<S: Type, T: MonadFix> MonadFix for StateT<S, T> {
     fn mfix<A: ExprCapable>() -> Expr!((A => Self::Apply<A>) => Self::Apply<A>) {
-        funexp!(|f| Expression::fix(fun!(|st, s| mdo!({
-            use T;
-            let pat!((s, a)) = st.apply(s);
-            f.apply(a).apply(s)
-        })
-        .eval()))
-        .eval())
+        funexp!(|f, s| T::mfix()
+            .apply_value(fun!(|sa| f.apply(snd().apply(sa)).apply(s).eval()))
+            .eval())
     }
 }
