@@ -112,6 +112,53 @@ macro_rules! funexp {
     };
 }
 
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __ado_expr {
+    (; $value:expr) => {
+        $value
+    };
+    ($([$binding:ident ; $($ty:ty)? ; $($pat:pat)?])* ; $value:expr) => {
+        $crate::fun!(
+            |$($binding: $crate::__opt_ty!($($ty)?)),*| {
+                $($(
+                    let $pat = $binding;
+                )?)*
+                $crate::expression::Expression::eval($value)
+            }
+        )
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! ado {
+    ({use $app:path; let $var:ident $(: $ty:ty)? = $init:expr; $($rest:tt)+} $($bindings:tt)*) => {
+        <$app as $crate::control::Applicative>::ap()
+            .apply($crate::ado!({use $app; $($rest)+} [$var ; $($ty)? ;] $($bindings)*))
+            .apply($init)
+    };
+    ({use $app:path; let _ = $init:expr; $($rest:tt)+} $($bindings:tt)*) => {
+        <$app as $crate::control::Applicative>::ap()
+            .apply($crate::ado!({use $app; $($rest)+} [blank ; ; _] $($bindings)*))
+            .apply($init)
+    };
+    ({use $app:path; let pat!($pat:pat) $(: $ty:ty)? = $init:expr; $($rest:tt)+} $($bindings:tt)*) => {
+        <$app as $crate::control::Applicative>::ap()
+            .apply($crate::ado!({use $app; $($rest)+} [arg ; $($ty)? ; $pat] $($bindings)*))
+            .apply($init)
+    };
+    ({use $app:path; $init:expr; $($rest:tt)+} $($bindings:tt)*) => {
+        <$app as $crate::control::Applicative>::ap()
+            .apply($crate::ado!({use $app; $($rest)+} [blank ; ; _] $($bindings)*))
+            .apply($init)
+    };
+    ({use $app:path; return $init:expr $(;)?} $($bindings:tt)*) => {
+        <$app as $crate::control::Applicative>::pure()
+            .apply_value($crate::__ado_expr!($($bindings)* ; $init))
+    };
+}
+
 /// Monadic do-notation.
 #[macro_export]
 macro_rules! mdo {
@@ -140,6 +187,10 @@ macro_rules! mdo {
     ({use $monad:path; $init:expr; $($rest:tt)+}) => {
         <$monad as $crate::control::Monad>::sequence()
             .apply({ $crate::mdo!({use $monad; $($rest)+}) })
+            .apply($init)
+    };
+    ({use $monad:path; return $init:expr $(;)?}) => {
+        <$monad as $crate::control::Applicative>::pure()
             .apply($init)
     };
     ({use $monad:path; $init:expr;}) => {

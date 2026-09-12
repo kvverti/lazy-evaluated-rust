@@ -5,26 +5,54 @@ use crate::{
     control::{Applicative, Monad, MonadFix},
     data::{
         Type,
-        pair::{Pair, map_snd, snd},
+        pair::{Pair, map_snd, pair, snd},
     },
     expression::{ExprCapable, Expression, FnType},
     fun,
-    function::compose,
+    function::{compose, constant, dup},
     funexp, mdo,
 };
 
 use super::{Functor, TypeCtor, identity::Identity};
 
-pub type StateFn<S, T, A> = ExprType!((type <S as Type>::Apply) => type <T as TypeCtor>::Apply<Pair<<S as Type>::Apply, A>>);
+pub type StateFn<S, T, A> = ExprType!(S => type <T as TypeCtor>::Apply<Pair<S, A>>);
 
 #[derive(Debug, Clone)]
 pub struct StateT<S: Type, T: TypeCtor>(PhantomData<(S, T)>);
 pub type State<S> = StateT<S, Identity>;
 
+/// Gets the state value.
+pub fn get<S: ExprCapable, T: Applicative>() -> Expr!(StateFn<S, T, S>) {
+    T::pure().compose(dup().apply(pair()))
+}
+
+/// Sets the state value.
+pub fn set<S: ExprCapable, T: Applicative>() -> Expr!(S => StateFn<S, T, ()>) {
+    funexp!(|s| constant()
+        .apply(T::pure().apply_value((s, Expression::new(()))))
+        .eval())
+}
+
+/// Updates the state value using an applicative update function.
+pub fn update_a<S: ExprCapable, T: Applicative>() -> Expr!((S => T::Apply<S>) => StateFn<S, T, ()>)
+{
+    funexp!(|f, s| T::map2()
+        .apply(pair())
+        .apply(f.apply(s))
+        .apply(T::pure().apply_value(()))
+        .eval())
+}
+
+/// Updates the state value using a pure update function.
+pub fn update<S: ExprCapable, T: Applicative>() -> Expr!((S => S) => StateFn<S, T, ()>) {
+    // update = updateA . (pure .)
+    update_a::<S, T>().compose(compose().apply(T::pure()))
+}
+
 impl<S: Type, T: TypeCtor> ExprCapable for StateT<S, T> {}
 
 impl<S: Type, T: TypeCtor> TypeCtor for StateT<S, T> {
-    type Apply<A: ExprCapable> = StateFn<S, T, A>;
+    type Apply<A: ExprCapable> = StateFn<S::Apply, T, A>;
 }
 
 impl<S: Type, T: Functor> Functor for StateT<S, T> {
@@ -53,7 +81,7 @@ impl<S: Type, T: Monad> Applicative for StateT<S, T> {
             use T;
             let pat!((s, a)) = sta.apply(s);
             let pat!((s, b)) = stb.apply(s);
-            T::pure().apply_value((s, f.apply(a).apply(b)))
+            return Expression::new((s, f.apply(a).apply(b)));
         })
         .eval())
     }
