@@ -34,6 +34,33 @@ macro_rules! __opt_ty {
     };
 }
 
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __letrec_expr {
+    (; $value:expr) => {
+        $value
+    };
+    ($([$var:ident ; $($ty:ty)? ; $init:expr ; $($pat:pat)?])+ ; $value:expr) => {{
+        $crate::__create_letrec_struct!($($var)+);
+        #[allow(unused_variables)]
+        let LetRecVars { $($var,)* }: LetRecVars<$($crate::__opt_ty!($($ty)?),)*> = $crate::expression::DataExpr::destructure(
+            $crate::expression::Expression::fix($crate::fun!(|rec| {
+                let LetRecVars { $($var,)* } = $crate::expression::DataExpr::destructure(rec);
+                $($(
+                    let $pat = $var;
+                )?)+
+                LetRecVars {
+                    $($var: $init,)*
+                }
+            }))
+        );
+        $($(
+            let $pat = $var;
+        )?)+
+        $value
+    }};
+}
+
 /// Defines a collection of mutually recursive bindings and constructs an expression using them.
 ///
 /// ## Usage
@@ -56,20 +83,14 @@ macro_rules! __opt_ty {
 /// ```
 #[macro_export]
 macro_rules! letrec {
-    ({$(let $var:ident $(: $ty:ty)? = $init:expr;)+ $value:expr}) => {
-        {
-            $crate::__create_letrec_struct!($($var)*);
-            #[allow(unused)]
-            let LetRecVars { $($var,)* }: LetRecVars<$($crate::__opt_ty!($($ty)?),)*> = $crate::expression::DataExpr::destructure(
-                $crate::expression::Expression::fix($crate::expression::FnType::new(|rec| {
-                    let LetRecVars { $($var,)* } = $crate::expression::DataExpr::destructure(rec);
-                    LetRecVars {
-                        $($var: $init,)*
-                    }
-                }))
-            );
-            $value
-        }
+    ({let $var:ident $(: $ty:ty)? = $init:expr; $($rest:tt)*} $($bindings:tt)*) => {
+        $crate::letrec!({$($rest)*} [$var ; $($ty)? ; $init ;] $($bindings)*)
+    };
+    ({let pat!($pat:pat) $(: $ty:ty)? = $init:expr; $($rest:tt)*} $($bindings:tt)*) => {
+        $crate::letrec!({$($rest)*} [var ; $($ty)? ; $init ; $pat] $($bindings)*)
+    };
+    {{$value:expr} $($bindings:tt)*} => {
+        $crate::__letrec_expr!($($bindings)* ; $value)
     };
 }
 
@@ -118,7 +139,7 @@ macro_rules! __ado_expr {
     (; $value:expr) => {
         $value
     };
-    ($([$binding:ident ; $($ty:ty)? ; $($pat:pat)?])* ; $value:expr) => {
+    ($([$binding:ident ; $($ty:ty)? ; $($pat:pat)?])+ ; $value:expr) => {
         $crate::fun!(
             |$($binding: $crate::__opt_ty!($($ty)?)),*| {
                 $($(
@@ -130,6 +151,9 @@ macro_rules! __ado_expr {
     };
 }
 
+/// Applicative do-notation. This is similar to monadic do-notation ([mdo!]), but the applicative
+/// bindings may not refer to one another and the result expression must be pure. In return, applicative
+/// do-notation can be used with any applicative type constructor.
 #[doc(hidden)]
 #[macro_export]
 macro_rules! ado {
