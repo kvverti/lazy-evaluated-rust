@@ -136,18 +136,25 @@ macro_rules! funexp {
 #[doc(hidden)]
 #[macro_export]
 macro_rules! __ado_expr {
-    (; $value:expr) => {
-        $value
+    ($app:path ; $value:expr) => {
+        <$app as $crate::control::Applicative>::pure()
+            .apply($value)
     };
-    ($([$binding:ident ; $($ty:ty)? ; $($pat:pat)?])+ ; $value:expr) => {
-        $crate::fun!(
-            |$($binding: $crate::__opt_ty!($($ty)?)),*| {
-                $($(
-                    let $pat = $crate::expression::DataExpr::destructure($binding);
-                )?)*
-                $crate::expression::Expression::eval($value)
-            }
-        )
+    ($app:path $([$binding:ident ; $($ty:ty)? ; $($pat:pat)?])+ ; $value:expr) => {
+        <$app as $crate::control::Applicative>::pure()
+            .apply_value($crate::fun!(
+                |$($binding: $crate::__opt_ty!($($ty)?)),*| {
+                    $($(
+                        let $pat = $crate::expression::DataExpr::destructure($binding);
+                    )?)*
+                    $crate::expression::Expression::eval($value)
+                }
+            ))
+    };
+    ($app:path [$init:expr] $($rest:tt)+) => {
+        <$app as $crate::control::Applicative>::ap()
+            .apply($crate::__ado_expr!($app $($rest)+))
+            .apply($init)
     };
 }
 
@@ -156,31 +163,21 @@ macro_rules! __ado_expr {
 /// do-notation can be used with any applicative type constructor.
 #[doc(hidden)]
 #[macro_export]
-// todo: fix the ordering on this
 macro_rules! ado {
     ({use $app:path; let $var:ident $(: $ty:ty)? = $init:expr; $($rest:tt)+} $($bindings:tt)*) => {
-        <$app as $crate::control::Applicative>::ap()
-            .apply($crate::ado!({use $app; $($rest)+} [$var ; $($ty)? ;] $($bindings)*))
-            .apply($init)
+        $crate::ado!({use $app; $($rest)+} [$init] $($bindings)* [$var ; $($ty)? ;])
     };
     ({use $app:path; let _ = $init:expr; $($rest:tt)+} $($bindings:tt)*) => {
-        <$app as $crate::control::Applicative>::ap()
-            .apply($crate::ado!({use $app; $($rest)+} [blank ; ; _] $($bindings)*))
-            .apply($init)
+        $crate::ado!({use $app; $($rest)+} [$init] $($bindings)* [blank ; ; _])
     };
     ({use $app:path; let pat!($pat:pat) $(: $ty:ty)? = $init:expr; $($rest:tt)+} $($bindings:tt)*) => {
-        <$app as $crate::control::Applicative>::ap()
-            .apply($crate::ado!({use $app; $($rest)+} [arg ; $($ty)? ; $pat] $($bindings)*))
-            .apply($init)
+        $crate::ado!({use $app; $($rest)+} [$init] $($bindings)* [arg ; $($ty)? ; $pat])
     };
     ({use $app:path; $init:expr; $($rest:tt)+} $($bindings:tt)*) => {
-        <$app as $crate::control::Applicative>::ap()
-            .apply($crate::ado!({use $app; $($rest)+} [blank ; ; _] $($bindings)*))
-            .apply($init)
+        $crate::ado!({use $app; $($rest)+} [$init] $($bindings)* [blank ; ; _])
     };
-    ({use $app:path; return $init:expr $(;)?} $($bindings:tt)*) => {
-        <$app as $crate::control::Applicative>::pure()
-            .apply_value($crate::__ado_expr!($($bindings)* ; $init))
+    ({use $app:path; return $value:expr $(;)?} $($bindings:tt)*) => {
+        $crate::__ado_expr!($app $($bindings)* ; $value)
     };
 }
 
@@ -267,16 +264,16 @@ macro_rules! __dorec_expr {
 #[macro_export]
 macro_rules! dorec {
     ({use $monad:path; let $var:ident $(: $ty:ty)? = $init:expr; $($rest:tt)+} $($bindings:tt)*) => {
-        $crate::dorec!({use $monad; $($rest)*} [$var ; $($ty)? ; $init ;] $($bindings)*)
+        $crate::dorec!({use $monad; $($rest)*} $($bindings)* [$var ; $($ty)? ; $init ;])
     };
     ({use $monad:path; let _ = $init:expr; $($rest:tt)+} ; $($bindings:tt)*) => {
-        $crate::dorec!({use $monad; $($rest)*} [blank ; ; $init ; _] $($bindings)*)
+        $crate::dorec!({use $monad; $($rest)*} $($bindings)* [blank ; ; $init ; _])
     };
     ({use $monad:path; let pat!($pat:pat) $(: $ty:ty)? = $init:expr; $($rest:tt)+} $($bindings:tt)*) => {
-        $crate::dorec!({use $monad; $($rest)*} [var ; $($ty)? ; $init ; $pat] $($bindings)*)
+        $crate::dorec!({use $monad; $($rest)*} $($bindings)* [var ; $($ty)? ; $init ; $pat])
     };
     ({use $monad:path; $init:expr; $($rest:tt)+} $($bindings:tt)*) => {
-        $crate::dorec!({use $monad; $($rest)*} [blank ; ; $init ; _] $($bindings)*)
+        $crate::dorec!({use $monad; $($rest)*} $($bindings)* [blank ; ; $init ; _])
     };
     ({use $monad:path; return $init:expr $(;)?} $($bindings:tt)*) => {
         $crate::__dorec_expr!(
