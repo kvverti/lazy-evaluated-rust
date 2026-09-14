@@ -143,7 +143,7 @@ macro_rules! __ado_expr {
         $crate::fun!(
             |$($binding: $crate::__opt_ty!($($ty)?)),*| {
                 $($(
-                    let $pat = $binding;
+                    let $pat = $crate::expression::DataExpr::destructure($binding);
                 )?)*
                 $crate::expression::Expression::eval($value)
             }
@@ -156,6 +156,7 @@ macro_rules! __ado_expr {
 /// do-notation can be used with any applicative type constructor.
 #[doc(hidden)]
 #[macro_export]
+// todo: fix the ordering on this
 macro_rules! ado {
     ({use $app:path; let $var:ident $(: $ty:ty)? = $init:expr; $($rest:tt)+} $($bindings:tt)*) => {
         <$app as $crate::control::Applicative>::ap()
@@ -224,6 +225,79 @@ macro_rules! mdo {
     };
     ({use $monad:path; $init:expr}) => {
         $init
+    };
+}
+
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __dorec_expr {
+    ($monad:path ; $value:expr) => {
+        $value
+    };
+    ($monad:path $([$var:ident ; $($ty:ty)? ; $init:expr ; $($pat:pat)?])+ ; $value:expr) => {{
+        $crate::__create_letrec_struct!($($var)+);
+        $crate::mdo!({
+            use $monad;
+            let pat!(LetRecVars { $(#[allow(unused_variables)] $var,)* }): LetRecVars<$($crate::__opt_ty!($($ty)?),)*> = (
+                <$monad as $crate::control::MonadFix>::mfix().apply_value($crate::fun!(|rec| {
+                    let LetRecVars { $(#[allow(unused_variables)] $var,)* } = $crate::expression::DataExpr::destructure(rec);
+                    $($(
+                        let $pat = $crate::expression::DataExpr::destructure($var);
+                    )?)+
+                    $crate::ado!({
+                        use $monad;
+                        $(let $var $(: $ty)? = $init;)*
+                        return $crate::expression::Expression::new(LetRecVars {
+                            $($var,)*
+                        })
+                    }).eval()
+                }))
+            );
+            {
+                $($(
+                    let $pat = $crate::expression::DataExpr::destructure($var);
+                )?)+
+                $value
+            }
+        })
+    }};
+}
+
+/// Recursive monadic do-notation
+#[macro_export]
+macro_rules! dorec {
+    ({use $monad:path; let $var:ident $(: $ty:ty)? = $init:expr; $($rest:tt)+} $($bindings:tt)*) => {
+        $crate::dorec!({use $monad; $($rest)*} [$var ; $($ty)? ; $init ;] $($bindings)*)
+    };
+    ({use $monad:path; let _ = $init:expr; $($rest:tt)+} ; $($bindings:tt)*) => {
+        $crate::dorec!({use $monad; $($rest)*} [blank ; ; $init ; _] $($bindings)*)
+    };
+    ({use $monad:path; let pat!($pat:pat) $(: $ty:ty)? = $init:expr; $($rest:tt)+} $($bindings:tt)*) => {
+        $crate::dorec!({use $monad; $($rest)*} [var ; $($ty)? ; $init ; $pat] $($bindings)*)
+    };
+    ({use $monad:path; $init:expr; $($rest:tt)+} $($bindings:tt)*) => {
+        $crate::dorec!({use $monad; $($rest)*} [blank ; ; $init ; _] $($bindings)*)
+    };
+    ({use $monad:path; return $init:expr $(;)?} $($bindings:tt)*) => {
+        $crate::__dorec_expr!(
+            $monad $($bindings)* ;
+            <$monad as $crate::control::Applicative>::pure()
+                .apply($init)
+        )
+    };
+    ({use $monad:path; $init:expr;} $($bindings:tt)*) => {
+        $crate::__dorec_expr!(
+            $monad $($bindings)* ;
+            <$monad as $crate::control::Functor>::map()
+                .apply($crate::function::constant().apply_value(()))
+                .apply($init)
+        )
+    };
+    ({use $monad:path; $init:expr} $($bindings:tt)*) => {
+        $crate::__dorec_expr!(
+            $monad $($bindings)* ;
+            $init
+        )
     };
 }
 
