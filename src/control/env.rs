@@ -1,10 +1,7 @@
 use std::marker::PhantomData;
 
 use crate::{
-    data::{Monoid, Type},
-    expression::{ExprCapable, Expression, FnType},
-    function::{call, combine, compose, constant, flip, s},
-    Expr,
+    Expr, data::{Monoid, Type}, expression::{ExprCapable, Expression, FnType}, fun, function::{call, combine, compose, constant, flip, s}, funexp,
 };
 
 use super::{identity::Identity, Applicative, Comonad, Functor, Monad, MonadFix, TypeCtor};
@@ -75,9 +72,9 @@ impl<R: Type, T: Monad> Monad for EnvT<R, T> {
 
 impl<R: Type, T: MonadFix> MonadFix for EnvT<R, T> {
     // mfix :: (a -> r -> t a) -> r -> t a
-    // mfix f = T::mfix . flip f
-    fn mfix<A: ExprCapable>() -> Expr!((A => Self::Apply<A>) => Self::Apply<A>) {
-        Expression::new(FnType::new(|f| T::mfix().compose(flip().apply(f)).eval()))
+    // mfix f r = T::mfix (\a -> f a r)
+    fn mfix<A: ExprCapable>(f: crate::ExprType!(A => Self::Apply<A>)) -> Expr!(Self::Apply<A>) {
+        funexp!(|r| T::mfix(fun!(|a| f.apply(a).apply(r).eval())).eval())
     }
 }
 

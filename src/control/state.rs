@@ -104,9 +104,7 @@ impl<S: Type, T: Monad> Monad for StateT<S, T> {
 // mfix :: (a -> s -> (s, a)) -> s -> (s, a)
 // mfix f s = fix (\(_, a) -> f a s)
 impl<S: Type, T: MonadFix> MonadFix for StateT<S, T> {
-    fn mfix<A: ExprCapable>() -> Expr!((A => Self::Apply<A>) => Self::Apply<A>) {
-        funexp!(|f, s| T::mfix()
-            .apply_value(fun!(|sa| f.apply(snd().apply(sa)).apply(s).eval()))
-            .eval())
+    fn mfix<A: ExprCapable>(f: ExprType!(A => Self::Apply<A>)) -> Expr!(Self::Apply<A>) {
+        funexp!(|s| T::mfix(fun!(|sa| f.apply(snd().apply(sa)).apply(s).eval())).eval())
     }
 }

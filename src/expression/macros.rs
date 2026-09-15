@@ -236,7 +236,7 @@ macro_rules! __dorec_expr {
         $crate::mdo!({
             use $monad;
             let pat!(LetRecVars { $(#[allow(unused_variables)] $var,)* }): LetRecVars<$($crate::__opt_ty!($($ty)?),)*> = (
-                <$monad as $crate::control::MonadFix>::mfix().apply_value($crate::fun!(|rec| {
+                <$monad as $crate::control::MonadFix>::mfix($crate::fun!(|rec| {
                     let LetRecVars { $(#[allow(unused_variables)] $var,)* } = $crate::expression::DataExpr::destructure(rec);
                     $($(
                         let $pat = $crate::expression::DataExpr::destructure($var);

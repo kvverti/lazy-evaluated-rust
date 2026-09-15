@@ -120,7 +120,7 @@ pub trait Monad: Applicative {
 /// 
 /// [`fix`]: crate::fix
 pub trait MonadFix: Monad {
-    fn mfix<A: ExprCapable>() -> Expr!((A => Self::Apply<A>) => Self::Apply<A>);
+    fn mfix<A: ExprCapable>(f: ExprType!(A => Self::Apply<A>)) -> Expr!(Self::Apply<A>);
 }
 
 /// The dual of a [`Monad`]. It can be thought of as a scheme for composing functions that take a context or

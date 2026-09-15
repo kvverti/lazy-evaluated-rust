@@ -1,7 +1,7 @@
 use std::marker::PhantomData;
 
 use crate::{
-    Expr,
+    Expr, ExprType,
     control::{Alt, Applicative, Functor, Monad, MonadFix, Traversable, TypeCtor},
     expression::{DataExpr, ExprCapable, Expression, FnType},
     function::{constant, id},
@@ -127,14 +127,14 @@ impl Monad for Maybe<()> {
 impl MonadFix for Maybe<()> {
     // mfix (a -> (Just a)) = Just a
     // mfix (_ -> Nothing) = Nothing
-    fn mfix<A: ExprCapable>() -> Expr!((A => Self::Apply<A>) => Self::Apply<A>) {
-        funexp!(|f| letrec!({
+    fn mfix<A: ExprCapable>(f: ExprType!(A => Self::Apply<A>)) -> Expr!(Self::Apply<A>) {
+        letrec!({
             let maybe = f.apply(Expression::lazy(|| match DataExpr::destructure(maybe) {
                 Maybe::Just(x) => x.eval(),
                 Maybe::Nothing => undefined().eval(),
             }));
-            maybe.eval()
-        }))
+            maybe
+        })
     }
 }
 

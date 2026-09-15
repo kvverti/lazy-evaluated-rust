@@ -1,9 +1,5 @@
 use crate::{
-    data::Foldable,
-    expression::{ExprCapable, Expression, FnType},
-    fix,
-    function::{compose, constant, flip, id},
-    Expr,
+    Expr, ExprType, data::Foldable, expression::{ExprCapable, Expression, FnType}, function::{compose, constant, flip, id},
 };
 
 use super::{Applicative, Comonad, Functor, Monad, MonadFix, Traversable, TypeCtor};
@@ -66,8 +62,8 @@ impl Monad for Identity {
 }
 
 impl MonadFix for Identity {
-    fn mfix<A: ExprCapable>() -> Expr!((A => Self::Apply<A>) => Self::Apply<A>) {
-        fix()
+    fn mfix<A: ExprCapable>(f: ExprType!(A => Self::Apply<A>)) -> Expr!(Self::Apply<A>) {
+        Expression::fix(f)
     }
 }
 
