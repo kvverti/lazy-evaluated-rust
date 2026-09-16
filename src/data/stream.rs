@@ -1,7 +1,7 @@
 use crate::{
     Expr,
     control::{Alt, Functor, TypeCtor, identity::Identity},
-    expression::{DataExpr, ExprCapable, Expression},
+    expression::{DataExpr, Expression},
     fun,
     function::{combine, flip},
     funexp, letrec,
@@ -24,13 +24,13 @@ pub type NonEmptyStreamT<T, A> = Cons<T, A>;
 pub type NonEmptyList<A> = NonEmptyStreamT<Maybe<()>, A>;
 
 #[derive(Clone)]
-pub struct Cons<T: TypeCtor, A: ExprCapable> {
+pub struct Cons<T: TypeCtor, A: Expr> {
     head: Expression<A>,
     tail: Expression<StreamT<T, A>>,
 }
 
-impl<T: TypeCtor, A: ExprCapable> ExprCapable for Cons<T, A> {}
-impl<T: TypeCtor, A: ExprCapable> DataExpr for Cons<T, A> {
+impl<T: TypeCtor, A: Expr> Expr for Cons<T, A> {}
+impl<T: TypeCtor, A: Expr> DataExpr for Cons<T, A> {
     fn destructure(v: Expression<Self>) -> Self {
         let v1 = v.clone();
         Self {
@@ -40,7 +40,7 @@ impl<T: TypeCtor, A: ExprCapable> DataExpr for Cons<T, A> {
     }
 }
 
-impl<T: TypeCtor, A: ExprCapable> Cons<T, A> {
+impl<T: TypeCtor, A: Expr> Cons<T, A> {
     pub fn new() -> Expr!(A => StreamT<T, A> => Self) {
         funexp!(|head, tail| Self { head, tail })
     }
@@ -62,7 +62,7 @@ impl<T: TypeCtor, A: ExprCapable> Cons<T, A> {
 
 // repeat ta = map (\a -> Cons a (repeat ta)) ta
 // repeat ta = fix (\xs -> map (\a -> Cons a xs) ta)
-pub fn repeat<T: Functor, A: ExprCapable>() -> Expr!(T::Apply<A> => StreamT<T, A>) {
+pub fn repeat<T: Functor, A: Expr>() -> Expr!(T::Apply<A> => StreamT<T, A>) {
     funexp!(|elem| letrec!({
         let stream = T::map()
             .apply(flip().apply(Cons::new()).apply(stream))
@@ -74,7 +74,7 @@ pub fn repeat<T: Functor, A: ExprCapable>() -> Expr!(T::Apply<A> => StreamT<T, A
 // flipconcat tys = rec0
 //  where rec1 (x:txs') = Cons::new x (rec0 txs')
 //        rec0 = flip alt tys . map rec1
-pub fn concat<T: Functor + Alt, A: ExprCapable>()
+pub fn concat<T: Functor + Alt, A: Expr>()
 -> Expr!(StreamT<T, A> => StreamT<T, A> => StreamT<T, A>) {
     flip().apply_value(fun!(|tys| {
         letrec!({
@@ -98,7 +98,7 @@ pub mod instance {
         Expr, ExprType,
         control::{Alt, Applicative, Functor, Monad, Traversable, TypeCtor, identity::Identity},
         data::Foldable,
-        expression::{DataExpr, ExprCapable},
+        expression::DataExpr,
         fun,
         function::{call, combine, flip},
         funexp, letrec,
@@ -111,15 +111,15 @@ pub mod instance {
 
     pub type Stream = StreamT<Identity>;
 
-    impl<T: TypeCtor> ExprCapable for StreamT<T> {}
+    impl<T: TypeCtor> Expr for StreamT<T> {}
     impl<T: TypeCtor> TypeCtor for StreamT<T> {
-        type Apply<A: ExprCapable> = super::StreamT<T, A>;
+        type Apply<A: Expr> = super::StreamT<T, A>;
     }
 
     impl<T: Functor> Functor for StreamT<T> {
         // map f = map (\(x:xs) -> f x : map f xs)
         // map f = map (combine new (f . head) (map f . tail))
-        fn map<A: ExprCapable, B: ExprCapable>()
+        fn map<A: Expr, B: Expr>()
         -> Expr!((A => B) => Self::Apply<A> => Self::Apply<B>) {
             funexp!(|f| letrec!({
                 let rec = T::map().apply(
@@ -138,7 +138,7 @@ pub mod instance {
         // foldr f = rec0
         //     where rec0 = T::foldr rec
         //           rec (x:txs) b = f x (rec0 b txs)
-        fn foldr<A: ExprCapable, B: ExprCapable>()
+        fn foldr<A: Expr, B: Expr>()
         -> Expr!((A => B => B) => B => Self::Apply<A> => B) {
             funexp!(|f| letrec!({
                 let rec0 = T::foldr().apply(rec1);
@@ -155,7 +155,7 @@ pub mod instance {
         // traverse f = rec0
         //  where rec0 = T::traverse rec1
         //        rec1 (x:txs) = F::map2 Cons::new (f x) (rec0 txs)
-        fn traverse<F: Applicative, A: ExprCapable, B: ExprCapable>()
+        fn traverse<F: Applicative, A: Expr, B: Expr>()
         -> Expr!((A => F::Apply<B>) => Self::Apply<A> => F::Apply<Self::Apply<B>>) {
             funexp!(|f| letrec!({
                 let rec0 = T::traverse::<F, _, _>().apply(rec1);
@@ -171,13 +171,13 @@ pub mod instance {
     #[derive(Debug, Clone)]
     pub struct Pairwise<T: TypeCtor>(PhantomData<T>);
 
-    impl<T: TypeCtor> ExprCapable for Pairwise<T> {}
+    impl<T: TypeCtor> Expr for Pairwise<T> {}
     impl<T: TypeCtor> TypeCtor for Pairwise<T> {
-        type Apply<A: ExprCapable> = super::StreamT<T, A>;
+        type Apply<A: Expr> = super::StreamT<T, A>;
     }
 
     impl<T: Functor> Functor for Pairwise<T> {
-        fn map<A: ExprCapable, B: ExprCapable>()
+        fn map<A: Expr, B: Expr>()
         -> Expr!((A => B) => Self::Apply<A> => Self::Apply<B>) {
             StreamT::<T>::map()
         }
@@ -185,12 +185,12 @@ pub mod instance {
 
     impl<T: Applicative> Applicative for Pairwise<T> {
         // pure a = repeat (pure a)
-        fn pure<A: ExprCapable>() -> Expr!(A => Self::Apply<A>) {
+        fn pure<A: Expr>() -> Expr!(A => Self::Apply<A>) {
             repeat::<T, _>().compose(T::pure())
         }
 
         // map2 f = T::map2 (\(a:tas) (b:tbs) -> f a b : map2 f tas tbs)
-        fn map2<A: ExprCapable, B: ExprCapable, C: ExprCapable>()
+        fn map2<A: Expr, B: Expr, C: Expr>()
         -> Expr!((A => B => C) => Self::Apply<A> => Self::Apply<B> => Self::Apply<C>) {
             funexp!(|f| letrec!({
                 let helper = funexp!(|cons_a, cons_b| {
@@ -218,13 +218,13 @@ pub mod instance {
     #[derive(Debug, Clone)]
     pub struct Cartesian<T: TypeCtor>(PhantomData<T>);
 
-    impl<T: TypeCtor> ExprCapable for Cartesian<T> {}
+    impl<T: TypeCtor> Expr for Cartesian<T> {}
     impl<T: TypeCtor> TypeCtor for Cartesian<T> {
-        type Apply<A: ExprCapable> = super::StreamT<T, A>;
+        type Apply<A: Expr> = super::StreamT<T, A>;
     }
 
     impl<T: Functor> Functor for Cartesian<T> {
-        fn map<A: ExprCapable, B: ExprCapable>()
+        fn map<A: Expr, B: Expr>()
         -> Expr!((A => B) => Self::Apply<A> => Self::Apply<B>) {
             StreamT::<T>::map()
         }
@@ -232,18 +232,18 @@ pub mod instance {
 
     impl<T: Applicative + Alt> Applicative for Cartesian<T> {
         // pure a = pure (a : none)
-        fn pure<A: ExprCapable>() -> Expr!(A => Self::Apply<A>) {
+        fn pure<A: Expr>() -> Expr!(A => Self::Apply<A>) {
             T::pure().compose(flip().apply(Cons::new()).apply(T::none()))
         }
 
         // map2 f = ap . map f
-        fn map2<A: ExprCapable, B: ExprCapable, C: ExprCapable>()
+        fn map2<A: Expr, B: Expr, C: Expr>()
         -> Expr!((A => B => C) => Self::Apply<A> => Self::Apply<B> => Self::Apply<C>) {
             funexp!(|f| Self::ap().compose(Self::map().apply(f)).eval())
         }
 
         // ap = T::map2 (\(f:fs) (a:as) -> f a : (Self::map f as `concat` Self::map ($ a) fs `concat` Self::ap fs as))
-        fn ap<A: ExprCapable, B: ExprCapable>()
+        fn ap<A: Expr, B: Expr>()
         -> Expr!(Self::Apply<ExprType!(A => B)> => Self::Apply<A> => Self::Apply<B>) {
             T::map2().apply_value(fun!(|cons_f, cons_a| {
                 let (Cons { head: f, tail: fxs }, Cons { head: a, tail: axs }) =
@@ -264,14 +264,14 @@ pub mod instance {
 
     impl<T: Monad + Alt> Monad for Cartesian<T> {
         // bind f = join . map f
-        fn bind<A: ExprCapable, B: ExprCapable>()
+        fn bind<A: Expr, B: Expr>()
         -> Expr!((A => Self::Apply<B>) => Self::Apply<A> => Self::Apply<B>) {
             funexp!(|f| Self::join().compose(Self::map().apply(f)).eval())
         }
 
         // join = T::bind (\x -> (head x) `concat` (join (tail x)))
         // join = T::bind (combine concat head (join . tail))
-        fn join<A: ExprCapable>() -> Expr!(Self::Apply<Self::Apply<A>> => Self::Apply<A>) {
+        fn join<A: Expr>() -> Expr!(Self::Apply<Self::Apply<A>> => Self::Apply<A>) {
             letrec!({
                 let join = T::bind().apply(
                     combine()

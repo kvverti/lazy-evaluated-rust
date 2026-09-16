@@ -1,23 +1,23 @@
 //! Operator trait implementations for [super::Expression].
 
-use crate::{fun, Expr};
+use crate::{Expr, fun};
 use std::ops as stdops;
 
-use super::{ExprCapable, Expression};
+use super::Expression;
 
 macro_rules! impl_binary_op {
     ($trait:ident, $func:ident) => {
-        pub trait $trait<Rhs: ExprCapable>: ExprCapable {
-            type Output: ExprCapable;
+        pub trait $trait<Rhs: Expr>: Expr {
+            type Output: Expr;
 
             fn $func() -> Expr!(Self => Rhs => Self::Output);
         }
 
         impl<T, Rhs> $trait<Rhs> for T
         where
-            T: ExprCapable + stdops::$trait<Rhs>,
-            Rhs: ExprCapable,
-            T::Output: ExprCapable,
+            T: Expr + stdops::$trait<Rhs>,
+            Rhs: Expr,
+            T::Output: Expr,
         {
             type Output = T::Output;
 
@@ -29,7 +29,7 @@ macro_rules! impl_binary_op {
         impl<T, Rhs> stdops::$trait<Expression<Rhs>> for Expression<T>
         where
             T: $trait<Rhs>,
-            Rhs: ExprCapable,
+            Rhs: Expr,
         {
             type Output = Expression<T::Output>;
 
@@ -41,7 +41,7 @@ macro_rules! impl_binary_op {
         impl<T, Rhs> stdops::$trait<Rhs> for Expression<T>
         where
             T: $trait<Rhs>,
-            Rhs: ExprCapable,
+            Rhs: Expr,
         {
             type Output = Expression<T::Output>;
 
@@ -60,16 +60,16 @@ macro_rules! impl_binary_ops {
 
 macro_rules! impl_unary_op {
     ($trait:ident, $func:ident) => {
-        pub trait $trait: ExprCapable {
-            type Output: ExprCapable;
+        pub trait $trait: Expr {
+            type Output: Expr;
 
             fn $func() -> Expr!(Self => Self::Output);
         }
 
         impl<T> $trait for T
         where
-            T: ExprCapable + stdops::$trait,
-            T::Output: ExprCapable,
+            T: Expr + stdops::$trait,
+            T::Output: Expr,
         {
             type Output = T::Output;
 

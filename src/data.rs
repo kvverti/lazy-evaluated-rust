@@ -1,7 +1,7 @@
 use crate::{
     Expr,
     control::TypeCtor,
-    expression::{ExprCapable, Expression, FnType},
+    expression::{Expression, FnType},
     function::id,
     funexp,
 };
@@ -22,8 +22,8 @@ macro_rules! Tup {
 
 pub use Tup;
 
-pub trait Newtype: ExprCapable {
-    type Inner: ExprCapable;
+pub trait Newtype: Expr {
+    type Inner: Expr;
 
     fn lift(v: Expression<Self::Inner>) -> Self;
     fn unlift(v: Expression<Self>) -> Self::Inner;
@@ -33,8 +33,8 @@ pub fn coerce<T: Newtype, U: Newtype<Inner = T::Inner>>() -> Expr!(T => U) {
     Expression::new(FnType::new(|t| U::lift(FnType::new(T::unlift).apply(t))))
 }
 
-pub trait Type: ExprCapable {
-    type Apply: ExprCapable;
+pub trait Type: Expr {
+    type Apply: Expr;
 }
 
 /// A trait for types that define an associative binary operator.
@@ -53,9 +53,9 @@ pub trait Monoid: Associative {
 }
 
 pub trait Foldable: TypeCtor {
-    fn foldr<A: ExprCapable, B: ExprCapable>() -> Expr!((A => B => B) => B => Self::Apply<A> => B);
+    fn foldr<A: Expr, B: Expr>() -> Expr!((A => B => B) => B => Self::Apply<A> => B);
 
-    fn foldl_strict<A: ExprCapable, B: ExprCapable>()
+    fn foldl_strict<A: Expr, B: Expr>()
     -> Expr!((B => A => B) => B => Self::Apply<A> => B) {
         funexp!(|f, b, this| Self::foldr()
             .apply(funexp!(|a, g, b| g
@@ -68,7 +68,7 @@ pub trait Foldable: TypeCtor {
     }
 
     // fold_map f = foldr (append . f) empty
-    fn fold_map<M: Monoid, A: ExprCapable>() -> Expr!((A => M::Apply) => Self::Apply<A> => M::Apply)
+    fn fold_map<M: Monoid, A: Expr>() -> Expr!((A => M::Apply) => Self::Apply<A> => M::Apply)
     {
         funexp!(|f| {
             Self::foldr()
@@ -78,7 +78,7 @@ pub trait Foldable: TypeCtor {
         })
     }
 
-    fn fold<M: Monoid, A: ExprCapable>() -> Expr!(Self::Apply<M::Apply> => M::Apply) {
+    fn fold<M: Monoid, A: Expr>() -> Expr!(Self::Apply<M::Apply> => M::Apply) {
         Self::fold_map::<M, _>().apply(id())
     }
 }

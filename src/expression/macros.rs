@@ -9,9 +9,9 @@ macro_rules! __create_letrec_struct {
             $($fields: $crate::expression::Expression<$fields>,)*
         }
         #[allow(non_camel_case_types)]
-        impl<$($fields: $crate::expression::ExprCapable,)*> $crate::expression::ExprCapable for LetRecVars<$($fields,)*> {}
+        impl<$($fields: $crate::expression::Expr,)*> $crate::expression::Expr for LetRecVars<$($fields,)*> {}
         #[allow(non_camel_case_types)]
-        impl<$($fields: $crate::expression::ExprCapable,)*> $crate::expression::DataExpr for LetRecVars<$($fields,)*> {
+        impl<$($fields: $crate::expression::Expr,)*> $crate::expression::DataExpr for LetRecVars<$($fields,)*> {
             fn destructure(v: $crate::expression::Expression<Self>) -> Self {
                 Self {$(
                     $fields: $crate::expression::Expression::lazy({

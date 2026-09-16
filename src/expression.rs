@@ -8,10 +8,10 @@ pub mod ops;
 /// Trait for any type that supports being lazily evaluated.
 /// This includes types that have no internal structure as well
 /// as user-defined types that contain Expressions.
-pub trait ExprCapable: Clone + 'static {}
+pub trait Expr: Clone + 'static {}
 
 /// Trait for lazy data structures.
-pub trait DataExpr: ExprCapable {
+pub trait DataExpr: Expr {
     /// Lazily destructure a data structure into its component fields.
     /// This should be fully lazy for single-variant data, but for multi-variant data
     /// this evaluates the tag. In neither case are the fields evaluated.
@@ -20,16 +20,16 @@ pub trait DataExpr: ExprCapable {
 
 macro_rules! impl_primitive {
     ($($t:ty)*) => {
-        $( impl ExprCapable for $t {} )*
+        $( impl Expr for $t {} )*
     };
 }
 
-impl_primitive!(() u8 i8 u16 i16 u32 i32 u64 i64 u128 i128 usize isize char bool);
+impl_primitive!(() u8 i8 u16 i16 u32 i32 u64 i64 u128 i128 usize isize char bool std::convert::Infallible);
 
 macro_rules! impl_tuple {
     ($($t:ident $n:tt)*) => {
-        impl<$($t : ExprCapable),*> ExprCapable for ( $(Expression<$t>,)* ) {}
-        impl<$($t : ExprCapable),*> DataExpr for ( $(Expression<$t>,)* ) {
+        impl<$($t : Expr),*> Expr for ( $(Expression<$t>,)* ) {}
+        impl<$($t : Expr),*> DataExpr for ( $(Expression<$t>,)* ) {
             fn destructure(v: Expression<Self>) -> Self {
                 (
                     $( Expression::lazy({ let v = v.clone(); move || v.eval_ref().$n.eval_ref().clone() }), )*
@@ -63,11 +63,11 @@ impl_tuple!(
     (T0 0 T1 1 T2 2 T3 3 T4 4 T5 5 T6 6 T7 7 T8 8 T9 9 T10 10 T11 11 T12 12 T13 13 T14 14 T15 15 T16 16)
 );
 
-impl<T: ExprCapable, R: ExprCapable> ExprCapable for FnType<T, R> {}
-impl<T: ExprCapable> ExprCapable for PhantomData<T> {}
-impl<T: ExprCapable, const N: usize> ExprCapable for [Expression<T>; N] {}
+impl<T: Expr, R: Expr> Expr for FnType<T, R> {}
+impl<T: Expr> Expr for PhantomData<T> {}
+impl<T: Expr, const N: usize> Expr for [Expression<T>; N] {}
 
-impl<T: ExprCapable, const N: usize> DataExpr for [Expression<T>; N] {
+impl<T: Expr, const N: usize> DataExpr for [Expression<T>; N] {
     fn destructure(v: Expression<Self>) -> Self {
         core::array::from_fn(|idx| v.clone().map(move |arr| arr[idx].eval_ref().clone()))
     }
@@ -100,7 +100,7 @@ pub struct Expression<T> {
     value: Arc<Lazy<T, Box<dyn FnOnce() -> T>>>,
 }
 
-impl<T: ExprCapable> Expression<T> {
+impl<T: Expr> Expression<T> {
     /// Construct an expression that evaluates to the given value.
     pub fn new(value: T) -> Self {
         Self::lazy(|| value)
@@ -147,12 +147,12 @@ impl<T: ExprCapable> Expression<T> {
     }
 
     /// Returns an expression that evaluates to the value of this expression applied to the given function.
-    pub fn map<R: ExprCapable>(self, f: impl FnOnce(T) -> R + 'static) -> Expression<R> {
+    pub fn map<R: Expr>(self, f: impl FnOnce(T) -> R + 'static) -> Expression<R> {
         Expression::lazy(move || f(self.eval()))
     }
 }
 
-impl<T: ExprCapable, R: ExprCapable> Expression<FnType<T, R>> {
+impl<T: Expr, R: Expr> Expression<FnType<T, R>> {
     /// Lazily call this function with the given argument. When evaluated,
     /// this evaluates `self` and calls it with `arg`.
     pub fn apply(self, arg: Expression<T>) -> Expression<R> {
@@ -175,7 +175,7 @@ impl<T: ExprCapable, R: ExprCapable> Expression<FnType<T, R>> {
     }
 
     /// Compose this function with the given function.
-    pub fn compose<U: ExprCapable>(self, f: Expression<FnType<U, T>>) -> Expression<FnType<U, R>> {
+    pub fn compose<U: Expr>(self, f: Expression<FnType<U, T>>) -> Expression<FnType<U, R>> {
         f.map(|f| self.eval().compose(f))
     }
 }
@@ -183,21 +183,21 @@ impl<T: ExprCapable, R: ExprCapable> Expression<FnType<T, R>> {
 // comparison operators for expressions
 // these are all strict in both arguments.
 
-impl<T: ExprCapable + PartialEq> PartialEq for Expression<T> {
+impl<T: Expr + PartialEq> PartialEq for Expression<T> {
     fn eq(&self, other: &Self) -> bool {
         self.eval_ref() == other.eval_ref()
     }
 }
 
-impl<T: ExprCapable + Eq> Eq for Expression<T> {}
+impl<T: Expr + Eq> Eq for Expression<T> {}
 
-impl<T: ExprCapable + PartialOrd> PartialOrd for Expression<T> {
+impl<T: Expr + PartialOrd> PartialOrd for Expression<T> {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
         self.eval_ref().partial_cmp(other.eval_ref())
     }
 }
 
-impl<T: ExprCapable + Ord> Ord for Expression<T> {
+impl<T: Expr + Ord> Ord for Expression<T> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         self.eval_ref().cmp(other.eval_ref())
     }
@@ -225,7 +225,7 @@ where
 
 pub struct FnType<T, R>(Box<dyn FnCapable<T, R>>);
 
-impl<T: ExprCapable, R: ExprCapable> FnType<T, R> {
+impl<T: Expr, R: Expr> FnType<T, R> {
     pub fn new(f: impl FnOnce(Expression<T>) -> R + Clone + 'static) -> Self {
         Self(Box::new(f))
     }
@@ -250,7 +250,7 @@ impl<T: ExprCapable, R: ExprCapable> FnType<T, R> {
     }
 
     /// Compose this function with the given function.
-    pub fn compose<U: ExprCapable>(self, f: FnType<U, T>) -> FnType<U, R> {
+    pub fn compose<U: Expr>(self, f: FnType<U, T>) -> FnType<U, R> {
         FnType::new(|u| self.call(f.apply(u)))
     }
 }
