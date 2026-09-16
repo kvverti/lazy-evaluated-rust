@@ -1,8 +1,9 @@
 use std::marker::PhantomData;
 
 use crate::{
+    Expr, ExprType,
     control::{Applicative, Functor, TypeCtor},
-    expression::{Expr, Expression, FnType},
+    expression::{Expression, FnType},
 };
 
 /// A composition of two functors, which is also a functor. If both are applicative, the composition is also applicative.
@@ -15,8 +16,8 @@ impl<F: TypeCtor, G: TypeCtor> TypeCtor for Compose<F, G> {
 }
 
 impl<F: Functor, G: Functor> Functor for Compose<F, G> {
-    fn map<A: Expr, B: Expr>(
-    ) -> Expression<FnType<FnType<A, B>, FnType<Self::Apply<A>, Self::Apply<B>>>> {
+    fn map<A: Expr, B: Expr>()
+    -> Expression<FnType<FnType<A, B>, FnType<Self::Apply<A>, Self::Apply<B>>>> {
         F::map().compose(G::map())
     }
 }
@@ -33,5 +34,10 @@ impl<F: Applicative, G: Applicative> Applicative for Compose<F, G> {
         >,
     > {
         F::map2().compose(G::map2())
+    }
+
+    fn ap<A: Expr, B: Expr>()
+    -> Expr!(Self::Apply<ExprType!(A => B)> => Self::Apply<A> => Self::Apply<B>) {
+        F::map2().apply(G::ap())
     }
 }
