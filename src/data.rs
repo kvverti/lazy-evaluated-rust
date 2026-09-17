@@ -12,6 +12,7 @@ pub mod list;
 pub mod maybe;
 pub mod pair;
 pub mod stream;
+pub mod void;
 
 #[macro_export]
 macro_rules! Tup {
