@@ -11,13 +11,13 @@ use crate::{
 /// The canonical instance of this type class is the [`inst::StateT`] monad transformer.
 pub trait MonadState<S: Type>: Monad {
     /// Get the current value of the state.
-    fn get() -> Expr!(Self::Apply<S>);
+    fn get() -> Expr!(Self::Apply<S::Apply>);
 
     /// Set the state to a new value.
-    fn set() -> Expr!(S => Self::Apply<()>);
+    fn set() -> Expr!(S::Apply => Self::Apply<()>);
 
     /// Update the state using the given pure function.
-    fn update() -> Expr!((S => S) => Self::Apply<()>);
+    fn update() -> Expr!((S::Apply => S::Apply) => Self::Apply<()>);
 }
 
 /// Updates state using an applicative update function.
@@ -56,10 +56,8 @@ pub mod inst {
     /// The state monad, which imbues pure computations with state.
     pub type State<S> = StateT<S, Identity>;
 
-    impl<S: Type, T: TypeCtor> Expr for StateT<S, T> {}
-
     impl<S: Type, T: TypeCtor> TypeCtor for StateT<S, T> {
-        type Apply<A: Expr> = ExprType!(S => T::Apply<Tup!(S, A)>);
+        type Apply<A: Expr> = ExprType!(S::Apply => T::Apply<Tup!(S::Apply, A)>);
     }
 
     impl<S: Type, T: Functor> Functor for StateT<S, T> {
@@ -116,15 +114,15 @@ pub mod inst {
     }
 
     impl<S: Type, T: Monad> MonadState<S> for StateT<S, T> {
-        fn get() -> Expr!(Self::Apply<S>) {
+        fn get() -> Expr!(Self::Apply<S::Apply>) {
             funexp!(|s| T::pure().apply_value((s.clone(), s)).eval())
         }
 
-        fn set() -> Expr!(S => Self::Apply<()>) {
+        fn set() -> Expr!(S::Apply => Self::Apply<()>) {
             funexp!(|s, _| T::pure().apply_value((s, Expression::new(()))).eval())
         }
 
-        fn update() -> Expr!((S => S) => Self::Apply<()>) {
+        fn update() -> Expr!((S::Apply => S::Apply) => Self::Apply<()>) {
             funexp!(|f, s| T::pure()
                 .apply_value((f.apply(s), Expression::new(())))
                 .eval())

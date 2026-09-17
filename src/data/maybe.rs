@@ -26,8 +26,6 @@ impl<T: Expr> DataExpr for Maybe<T> {
 #[derive(Debug, Clone)]
 pub struct Monoidal<T: Type>(PhantomData<T>);
 
-impl<T: Type> Expr for Monoidal<T> {}
-
 impl<T: Type> Type for Monoidal<T> {
     type Apply = Maybe<T::Apply>;
 }

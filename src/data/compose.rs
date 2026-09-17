@@ -10,7 +10,6 @@ use crate::{
 #[derive(Debug, Clone)]
 pub struct Compose<F: TypeCtor, G: TypeCtor>(PhantomData<(F, G)>);
 
-impl<F: TypeCtor, G: TypeCtor> Expr for Compose<F, G> {}
 impl<F: TypeCtor, G: TypeCtor> TypeCtor for Compose<F, G> {
     type Apply<T: Expr> = F::Apply<G::Apply<T>>;
 }

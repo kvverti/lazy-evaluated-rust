@@ -33,8 +33,13 @@ pub fn coerce<T: Newtype, U: Newtype<Inner = T::Inner>>() -> Expr!(T => U) {
     Expression::new(FnType::new(|t| U::lift(FnType::new(T::unlift).apply(t))))
 }
 
-pub trait Type: Expr {
+pub trait Type: Clone + 'static {
     type Apply: Expr;
+}
+
+/// Every expression can be used as its own type.
+impl<T: Expr> Type for T {
+    type Apply = T;
 }
 
 /// A trait for types that define an associative binary operator.

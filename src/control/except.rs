@@ -53,7 +53,6 @@ pub mod inst {
     #[derive(Debug, Clone)]
     pub struct Except<E: Type>(PhantomData<E>);
 
-    impl<E: Type> Expr for Except<E> {}
     impl<E: Type> TypeCtor for Except<E> {
         type Apply<T: Expr> = super::Except<T, E::Apply>;
     }
@@ -164,7 +163,6 @@ pub mod inst {
     #[derive(Debug, Clone)]
     pub struct ExceptT<E: Type, M: TypeCtor>(PhantomData<(E, M)>);
 
-    impl<E: Type, M: TypeCtor> Expr for ExceptT<E, M> {}
     impl<E: Type, M: TypeCtor> TypeCtor for ExceptT<E, M> {
         type Apply<T: Expr> = <Compose<M, Except<E>> as TypeCtor>::Apply<T>;
     }

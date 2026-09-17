@@ -14,11 +14,11 @@ pub mod write;
 /// 
 /// [`Cartesian`]: crate::data::stream::instance::Cartesian
 /// [`Pairwise`]: crate::data::stream::instance::Pairwise
-pub trait TypeCtor: Expr {
+pub trait TypeCtor: Clone + 'static {
     type Apply<T: Expr>: Expr;
 }
 
-pub trait TypeCtor2: Expr {
+pub trait TypeCtor2: Clone + 'static {
     type Apply<A: Expr, B: Expr>: Expr;
 }
 

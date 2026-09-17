@@ -12,7 +12,6 @@ pub type Env<R> = EnvT<R, Identity>;
 #[derive(Debug, Clone)]
 pub struct EnvT<R: Type, T: TypeCtor>(PhantomData<(R, T)>);
 
-impl<R: Type, T: TypeCtor> Expr for EnvT<R, T> {}
 impl<R: Type, T: TypeCtor> TypeCtor for EnvT<R, T> {
     type Apply<A: Expr> = FnType<R::Apply, T::Apply<A>>;
 }

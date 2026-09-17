@@ -5,7 +5,7 @@ use crate::{
     Expr,
 };
 
-use super::{Associative, Foldable, Monoid, Type};
+use super::{Associative, Foldable, Monoid};
 
 /// A lazy cons list.
 #[derive(Debug, Clone)]
@@ -35,10 +35,6 @@ impl<T: Expr> DataExpr for ConsList<T> {
     fn destructure(v: Expression<Self>) -> Self {
         v.eval()
     }
-}
-
-impl<T: Expr> Type for ConsList<T> {
-    type Apply = Self;
 }
 
 impl<T: Expr> Associative for ConsList<T> {

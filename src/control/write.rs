@@ -18,7 +18,6 @@ pub struct WriteT<C: Type, T: TypeCtor>(PhantomData<(C, T)>);
 
 pub type Write<C> = WriteT<C, Identity>;
 
-impl<C: Type, T: TypeCtor> Expr for WriteT<C, T> {}
 impl<C: Type, T: TypeCtor> TypeCtor for WriteT<C, T> {
     type Apply<A: Expr> = T::Apply<Tup!(C::Apply, A)>;
 }

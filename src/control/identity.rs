@@ -8,7 +8,6 @@ use super::{Applicative, Comonad, Functor, Monad, MonadFix, Traversable, TypeCto
 #[derive(Debug, Clone)]
 pub struct Identity;
 
-impl Expr for Identity {}
 impl TypeCtor for Identity {
     type Apply<T: Expr> = T;
 }

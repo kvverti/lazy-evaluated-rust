@@ -14,8 +14,6 @@ use super::{Foldable, Monoid, Type};
 #[derive(Debug, Clone)]
 pub struct Const<C: Type>(PhantomData<C>);
 
-impl<C: Type> Expr for Const<C> {}
-
 impl<C: Type> TypeCtor for Const<C> {
     type Apply<T: Expr> = C::Apply;
 }

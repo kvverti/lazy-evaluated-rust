@@ -111,7 +111,6 @@ pub mod instance {
 
     pub type Stream = StreamT<Identity>;
 
-    impl<T: TypeCtor> Expr for StreamT<T> {}
     impl<T: TypeCtor> TypeCtor for StreamT<T> {
         type Apply<A: Expr> = super::StreamT<T, A>;
     }
@@ -171,7 +170,6 @@ pub mod instance {
     #[derive(Debug, Clone)]
     pub struct Pairwise<T: TypeCtor>(PhantomData<T>);
 
-    impl<T: TypeCtor> Expr for Pairwise<T> {}
     impl<T: TypeCtor> TypeCtor for Pairwise<T> {
         type Apply<A: Expr> = super::StreamT<T, A>;
     }
@@ -218,7 +216,6 @@ pub mod instance {
     #[derive(Debug, Clone)]
     pub struct Cartesian<T: TypeCtor>(PhantomData<T>);
 
-    impl<T: TypeCtor> Expr for Cartesian<T> {}
     impl<T: TypeCtor> TypeCtor for Cartesian<T> {
         type Apply<A: Expr> = super::StreamT<T, A>;
     }
