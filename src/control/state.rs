@@ -1,64 +1,65 @@
 //! The [`MonadState`] type class and its canonical instance, the state monad transformer.
 
-use crate::{ExprType, Tup};
+use crate::{
+    Expr, Tup,
+    control::{Applicative, Monad},
+    data::{Type, pair::pair},
+    funexp,
+};
 
-use super::TypeCtor;
+/// The `MonadState` type class defines monads that provide access to a changing state variable.
+/// The canonical instance of this type class is the [`inst::StateT`] monad transformer.
+pub trait MonadState<S: Type>: Monad {
+    /// Get the current value of the state.
+    fn get() -> Expr!(Self::Apply<S>);
 
-pub type StateFn<S, T, A> = ExprType!(S => type <T as TypeCtor>::Apply<Tup!(S, A)>);
+    /// Set the state to a new value.
+    fn set() -> Expr!(S => Self::Apply<()>);
+
+    /// Update the state using the given pure function.
+    fn update() -> Expr!((S => S) => Self::Apply<()>);
+}
+
+/// Updates state using an applicative update function.
+pub fn update_a<S: Expr, T: Applicative>() -> Expr!((S => T::Apply<S>) => S => T::Apply<Tup!(S, ())>)
+{
+    funexp!(|f, s| T::map2()
+        .apply(pair())
+        .apply(f.apply(s))
+        .apply(T::pure().apply_value(()))
+        .eval())
+}
 
 pub mod inst {
     use std::marker::PhantomData;
 
     use crate::{
-        Expr, ExprType,
+        Expr, ExprType, Tup,
         control::{
-            Applicative, Functor, Monad, MonadFix, TypeCtor, identity::Identity, state::StateFn,
+            Applicative, Functor, Monad, MonadFix, TypeCtor, identity::Identity, state::MonadState,
         },
         data::{
             Type,
-            pair::{map_snd, pair, snd},
+            pair::{map_snd, snd},
         },
         expression::Expression,
         fun,
-        function::{compose, constant, dup},
+        function::compose,
         funexp, mdo,
     };
 
+    /// The state monad transformer, which imbues a monad `T` with state. It is, of course,
+    /// an instance of [`MonadState`].
     #[derive(Debug, Clone)]
     pub struct StateT<S: Type, T: TypeCtor>(PhantomData<(S, T)>);
+
+    /// The state monad, which imbues pure computations with state.
     pub type State<S> = StateT<S, Identity>;
-
-    /// Gets the state value.
-    pub fn get<S: Expr, T: Applicative>() -> Expr!(StateFn<S, T, S>) {
-        T::pure().compose(dup().apply(pair()))
-    }
-
-    /// Sets the state value.
-    pub fn set<S: Expr, T: Applicative>() -> Expr!(S => StateFn<S, T, ()>) {
-        funexp!(|s| constant()
-            .apply(T::pure().apply_value((s, Expression::new(()))))
-            .eval())
-    }
-
-    /// Updates the state value using an applicative update function.
-    pub fn update_a<S: Expr, T: Applicative>() -> Expr!((S => T::Apply<S>) => StateFn<S, T, ()>) {
-        funexp!(|f, s| T::map2()
-            .apply(pair())
-            .apply(f.apply(s))
-            .apply(T::pure().apply_value(()))
-            .eval())
-    }
-
-    /// Updates the state value using a pure update function.
-    pub fn update<S: Expr, T: Applicative>() -> Expr!((S => S) => StateFn<S, T, ()>) {
-        // update = updateA . (pure .)
-        update_a::<S, T>().compose(compose().apply(T::pure()))
-    }
 
     impl<S: Type, T: TypeCtor> Expr for StateT<S, T> {}
 
     impl<S: Type, T: TypeCtor> TypeCtor for StateT<S, T> {
-        type Apply<A: Expr> = StateFn<S::Apply, T, A>;
+        type Apply<A: Expr> = ExprType!(S => T::Apply<Tup!(S, A)>);
     }
 
     impl<S: Type, T: Functor> Functor for StateT<S, T> {
@@ -90,11 +91,6 @@ pub mod inst {
             })
             .eval())
         }
-
-        fn ap<A: Expr, B: Expr>()
-        -> Expr!(Self::Apply<ExprType!(A => B)> => Self::Apply<A> => Self::Apply<B>) {
-            Self::map2().apply(crate::function::id())
-        }
     }
 
     impl<S: Type, T: Monad> Monad for StateT<S, T> {
@@ -116,6 +112,22 @@ pub mod inst {
     impl<S: Type, T: MonadFix> MonadFix for StateT<S, T> {
         fn mfix<A: Expr>(f: ExprType!(A => Self::Apply<A>)) -> Expr!(Self::Apply<A>) {
             funexp!(|s| T::mfix(fun!(|sa| f.apply(snd().apply(sa)).apply(s).eval())).eval())
+        }
+    }
+
+    impl<S: Type, T: Monad> MonadState<S> for StateT<S, T> {
+        fn get() -> Expr!(Self::Apply<S>) {
+            funexp!(|s| T::pure().apply_value((s.clone(), s)).eval())
+        }
+
+        fn set() -> Expr!(S => Self::Apply<()>) {
+            funexp!(|s, _| T::pure().apply_value((s, Expression::new(()))).eval())
+        }
+
+        fn update() -> Expr!((S => S) => Self::Apply<()>) {
+            funexp!(|f, s| T::pure()
+                .apply_value((f.apply(s), Expression::new(())))
+                .eval())
         }
     }
 }
