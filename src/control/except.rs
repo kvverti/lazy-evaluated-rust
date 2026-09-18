@@ -40,7 +40,8 @@ pub mod inst {
     use crate::{
         Expr, ExprType,
         control::{
-            Applicative, Functor, Monad, MonadFix, Traversable, TypeCtor, except::MonadExcept,
+            Applicative, Functor, Monad, MonadFix, MonadTrans, Traversable, TypeCtor,
+            except::MonadExcept,
         },
         data::{Foldable, Type, compose::Compose},
         dorec,
@@ -232,6 +233,12 @@ pub mod inst {
     impl<E: Type, M: Monad> MonadExcept<E> for ExceptT<E, M> {
         fn escape<A: Expr>() -> Expr!(E::Apply => Self::Apply<A>) {
             M::pure().compose(<Except<E>>::escape())
+        }
+    }
+
+    impl<E: Type, M: Monad> MonadTrans<M> for ExceptT<E, M> {
+        fn lift<A: Expr>() -> Expr!(M::Apply<A> => Self::Apply<A>) {
+            M::map().apply(<Except<E>>::pure())
         }
     }
 }

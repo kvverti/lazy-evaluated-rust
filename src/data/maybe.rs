@@ -2,7 +2,7 @@ use std::marker::PhantomData;
 
 use crate::{
     Expr, ExprType,
-    control::{Alt, Applicative, Functor, Monad, MonadFix, Traversable, TypeCtor},
+    control::{Alt, Applicative, Functor, Monad, MonadFix, MonadTrans, Traversable, TypeCtor},
     expression::{DataExpr, Expression, FnType},
     function::{constant, id},
     funexp, letrec, mdo, undefined,
@@ -164,5 +164,11 @@ impl<M: Monad> Monad for Compose<M, Maybe<()>> {
             })
             .eval()
         })
+    }
+}
+
+impl<M: Monad> MonadTrans<M> for Compose<M, Maybe<()>> {
+    fn lift<A: Expr>() -> Expr!(M::Apply<A> => Self::Apply<A>) {
+        M::map().apply(Maybe::pure())
     }
 }

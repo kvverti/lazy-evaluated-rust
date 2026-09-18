@@ -124,6 +124,16 @@ pub trait MonadFix: Monad {
     fn mfix<A: Expr>(f: ExprType!(A => Self::Apply<A>)) -> Expr!(Self::Apply<A>);
 }
 
+/// The type class for monad transformers. A monad transformer imbues an existing monad with new capabilities and defines a
+/// function [`MonadTrans::lift`] that wraps computation in the underlying monad.
+/// 
+/// Note that this definition specifies an underlying monad rather than leaving it abstract. However, it is expected
+/// that all monad transformers will implement this class parametrically for all monads.
+pub trait MonadTrans<M: Monad>: Monad {
+    /// Lift a computation of the underlying monad into this monad.
+    fn lift<A: Expr>() -> Expr!(M::Apply<A> => Self::Apply<A>);
+}
+
 /// The dual of a [`Monad`]. It can be thought of as a scheme for composing functions that take a context or
 /// effect in addition to an argument. Analogous to [`Monad`], [`Comonad::extract`] is the identity element
 /// of comonadic composition.

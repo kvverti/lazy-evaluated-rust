@@ -36,7 +36,8 @@ pub mod inst {
     use crate::{
         Expr, ExprType, Tup,
         control::{
-            Applicative, Functor, Monad, MonadFix, TypeCtor, identity::Identity, state::MonadState,
+            Applicative, Functor, Monad, MonadFix, MonadTrans, TypeCtor, identity::Identity,
+            state::MonadState,
         },
         data::{
             Type,
@@ -126,6 +127,12 @@ pub mod inst {
             funexp!(|f, s| T::pure()
                 .apply_value((f.apply(s), Expression::new(())))
                 .eval())
+        }
+    }
+
+    impl<S: Type, T: Monad> MonadTrans<T> for StateT<S, T> {
+        fn lift<A: Expr>() -> Expr!(T::Apply<A> => Self::Apply<A>) {
+            funexp!(|ma, s| T::map().apply_value(fun!(|a| (s, a))).apply(ma).eval())
         }
     }
 }
