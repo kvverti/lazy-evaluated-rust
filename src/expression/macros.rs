@@ -168,13 +168,13 @@ macro_rules! ado {
         $crate::ado!({use $app; $($rest)+} [$init] $($bindings)* [$var ; $($ty)? ;])
     };
     ({use $app:path; let _ = $init:expr; $($rest:tt)+} $($bindings:tt)*) => {
-        $crate::ado!({use $app; $($rest)+} [$init] $($bindings)* [blank ; ; _])
+        $crate::ado!({use $app; $($rest)+} [$init] $($bindings)* [_blank ; ; ])
     };
     ({use $app:path; let pat!($pat:pat) $(: $ty:ty)? = $init:expr; $($rest:tt)+} $($bindings:tt)*) => {
         $crate::ado!({use $app; $($rest)+} [$init] $($bindings)* [arg ; $($ty)? ; $pat])
     };
     ({use $app:path; $init:expr; $($rest:tt)+} $($bindings:tt)*) => {
-        $crate::ado!({use $app; $($rest)+} [$init] $($bindings)* [blank ; ; _])
+        $crate::ado!({use $app; $($rest)+} [$init] $($bindings)* [_blank ; ; ])
     };
     ({use $app:path; return $value:expr $(;)?} $($bindings:tt)*) => {
         $crate::__ado_expr!($app $($bindings)* ; $value)
@@ -267,13 +267,13 @@ macro_rules! dorec {
         $crate::dorec!({use $monad; $($rest)*} $($bindings)* [$var ; $($ty)? ; $init ;])
     };
     ({use $monad:path; let _ = $init:expr; $($rest:tt)+} ; $($bindings:tt)*) => {
-        $crate::dorec!({use $monad; $($rest)*} $($bindings)* [blank ; ; $init ; _])
+        $crate::dorec!({use $monad; $($rest)*} $($bindings)* [_blank ; ; $init ; ])
     };
     ({use $monad:path; let pat!($pat:pat) $(: $ty:ty)? = $init:expr; $($rest:tt)+} $($bindings:tt)*) => {
         $crate::dorec!({use $monad; $($rest)*} $($bindings)* [var ; $($ty)? ; $init ; $pat])
     };
     ({use $monad:path; $init:expr; $($rest:tt)+} $($bindings:tt)*) => {
-        $crate::dorec!({use $monad; $($rest)*} $($bindings)* [blank ; ; $init ; _])
+        $crate::dorec!({use $monad; $($rest)*} $($bindings)* [_blank ; ; $init ; ])
     };
     ({use $monad:path; return $init:expr $(;)?} $($bindings:tt)*) => {
         $crate::__dorec_expr!(

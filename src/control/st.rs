@@ -209,7 +209,7 @@ pub mod inst {
     mod tests {
         use std::cell::Cell;
 
-        use crate::{dorec, mdo};
+        use crate::{ado, control::st::STRef, dorec, mdo};
 
         use super::*;
 
@@ -258,6 +258,23 @@ pub mod inst {
             }));
             assert_eq!(result.eval(), 1);
             assert_eq!(count.get(), 1);
+        }
+
+        #[test]
+        fn stref() {
+            let result = run_st!(mdo!({
+                use ST<_>;
+                let x = STRef::new().apply_value(2);
+                // cloning in mdo is impossible...
+                ado!({
+                    use ST<_>;
+                    STRef::set().apply(x.clone()).apply_value(4);
+                    STRef::update().apply(x).apply_value(fun!(|x| x.eval() * 3));
+                    return Expression::new(());
+                });
+                STRef::get().apply(x.clone())
+            }));
+            assert_eq!(result.eval(), 12);
         }
     }
 }
